@@ -1,0 +1,33 @@
+{
+  "name": "websocket-rpc-protocol",
+  "version": "0.1.0",
+  "description": "A JSON RPC protocol for working over websockets. Sheds the weight of JSON RPC to simplify argument names and adds features.",
+  "scripts": {
+    "build": "tsc",
+    "prepare": "tsc"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dabblewriter/websocket-rpc-protocol.git"
+  },
+  "keywords": [
+    "WebSocket",
+    "reconnect",
+    "protocol",
+    "rpc",
+    "json"
+  ],
+  "author": "Jacob Wright",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/dabblewriter/websocket-rpc-protocol/issues"
+  },
+  "homepage": "https://github.com/dabblewriter/websocket-rpc-protocol#readme",
+  "devDependencies": {
+    "typescript": "^4.8.2"
+  },
+  "dependencies": {
+    "crypto-id": "^0.1.0",
+    "easy-signal": "^1.0.1"
+  }
+}
