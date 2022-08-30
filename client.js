@@ -2,6 +2,7 @@ import { signal } from 'easy-signal';
 import { createId } from 'crypto-id';
 const BASE_RETRY_TIME = 1000;
 const MAX_RETRY_BACKOFF = 4;
+const NOOP = () => { };
 export default function createClient(url, appVersion) {
     const requests = {};
     const afterConnectedQueue = [];
@@ -233,7 +234,13 @@ export default function createClient(url, appVersion) {
         update();
         closeSocket();
     }
-    return new Proxy({
+    function proxy(target, name) {
+        return new Proxy(target, {
+            apply: (_, __, args) => send(name, ...args),
+            get: (obj, prop) => prop in obj ? obj[prop] : proxy(NOOP, name ? `${name}.${prop}` : prop),
+        });
+    }
+    return proxy({
         connect,
         disconnect,
         close,
@@ -248,10 +255,5 @@ export default function createClient(url, appVersion) {
         get,
         subscribe,
         onChange,
-    }, {
-        // special case for fetch because of breaking behavior
-        get: (obj, prop) => prop in obj
-            ? obj[prop]
-            : (...args) => send(prop, ...args),
     });
 }

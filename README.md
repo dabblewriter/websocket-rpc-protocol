@@ -32,7 +32,12 @@ createServer(websocket, ({ push }) => {
 
   // return the public API
   return {
-    sayHi
+    sayHi,
+    namespace: {
+      sayBye(name?: string) {
+        return `Goodbye cruel ${name || 'world'}!`;
+      }
+    }
   };
 });
 ```
@@ -51,11 +56,16 @@ const client = createClient<API>('wss://url-to-server');
 // Call the method directly, TypeScript will support it and the method will be proxied using the send() method
 await client.sayHi(); // Hello world!
 await client.sayHi('everyone'); // Hello everyone!
+await client.namespace.sayBye(); // Goodbye cruel world!
 
-client.get() // {
-  // online: true, // Whether the browser's APIs think the browser is online
-  // connected: true, // Whether the websocket is connected
-  // authed: true, // If the connection has been successfully authenticated with a JWT
-  // serverTimeOffset: 20, // The offset in milliseconds between the client and the server
-//}
+console.log(client.get());
+/*
+Outputs:
+{
+  online: true, // Whether the browser's APIs think the browser is online
+  connected: true, // Whether the websocket is connected
+  authed: true, // If the connection has been successfully authenticated with a JWT
+  serverTimeOffset: 20, // The offset in milliseconds between the client and the server
+}
+*/
 ```

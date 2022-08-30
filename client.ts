@@ -3,6 +3,7 @@ import { createId } from 'crypto-id';
 
 const BASE_RETRY_TIME = 1000;
 const MAX_RETRY_BACKOFF = 4;
+const NOOP = () => {};
 
 export interface Client {
   online: boolean;
@@ -30,11 +31,7 @@ export interface ClientAPI {
   onChange: Signal<(data: Client) => any>;
 }
 
-export interface ClientAPIMethods {
-  [key: string]: (...args: any[]) => Promise<any>;
-}
-
-export default function createClient<T extends ClientAPIMethods = ClientAPIMethods>(url: string, appVersion: string): ClientAPI & T {
+export default function createClient<T = {}>(url: string, appVersion: string): ClientAPI & T {
   const requests: {[r: string]: Request} = {};
   const afterConnectedQueue: Array<Request> = [];
   const afterAuthedQueue: Array<Request> = [];
@@ -289,7 +286,14 @@ export default function createClient<T extends ClientAPIMethods = ClientAPIMetho
     closeSocket();
   }
 
-  return new Proxy({
+  function proxy(target: any, name?: string) {
+    return new Proxy(target, {
+      apply: (_, __, args) => send(name, ...args),
+      get: (obj, prop: string) => prop in obj ? obj[prop] : proxy(NOOP, name ? `${name}.${prop}` : prop),
+    });
+  }
+
+  return proxy({
     connect,
     disconnect,
     close,
@@ -304,12 +308,6 @@ export default function createClient<T extends ClientAPIMethods = ClientAPIMetho
     get,
     subscribe,
     onChange,
-  }, {
-    // special case for fetch because of breaking behavior
-    get: (obj, prop: string) =>
-      prop in obj
-      ? obj[prop]
-      : (...args: any[]) => send(prop, ...args),
   }) as any;
 }
 

@@ -22,9 +22,6 @@ export interface ClientAPI {
     subscribe(listener: (data: Client) => any): Unsubscribe;
     onChange: Signal<(data: Client) => any>;
 }
-export interface ClientAPIMethods {
-    [key: string]: (...args: any[]) => Promise<any>;
-}
-export default function createClient<T extends ClientAPIMethods = ClientAPIMethods>(url: string, appVersion: string): ClientAPI & T;
+export default function createClient<T = {}>(url: string, appVersion: string): ClientAPI & T;
 declare type GenericFunction = (...args: any[]) => any;
 export {};

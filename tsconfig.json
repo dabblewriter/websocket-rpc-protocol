@@ -10,7 +10,9 @@
     "lib": [
       "es2021", "DOM"
     ],
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "outDir": "./"
   },
+  "include": ["server.ts", "client.ts"],
   "exclude": ["node_modules"]
 }
