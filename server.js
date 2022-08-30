@@ -54,9 +54,13 @@ export default function createServer(socket, apiFactory) {
                 // the stream.
                 const signal = result;
                 const unsubscribe = signal((d) => {
-                    send({ r, s: 1, d });
-                    if (d === undefined)
+                    if (d === undefined) {
                         unsubscribe();
+                        send({ r });
+                    }
+                    else {
+                        send({ r, s: 1, d });
+                    }
                 });
                 const { error } = signal;
                 if (typeof error === 'function' && typeof error.dispatch === 'function') {
