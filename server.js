@@ -1,10 +1,10 @@
 // Exposes an API to a websocket endpoint using the protocol described in PROTOCOL.md
 export default function createServer(socket, apiFactory) {
-    const thisApi = { push, close };
+    const thisApi = { send, push, close };
     const api = apiFactory(thisApi);
     socket.addEventListener('message', onMessage);
     socket.addEventListener('close', close);
-    send({ ts: Date.now(), v: api.version });
+    send({ ts: Date.now(), v: api.getVersion?.() });
     return thisApi;
     function send(data) {
         socket.send(JSON.stringify(data));
