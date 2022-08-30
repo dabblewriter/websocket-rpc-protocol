@@ -1,17 +1,17 @@
 import { Signal } from 'easy-signal';
 
 export type APIMethod = (...args: any[]) => any;
-export type API = {version: number} & {[key: string]: APIMethod | API};
+export type API = {[key: string]: APIMethod | API};
 export type APIFactory = (socket: ReturnType<typeof createServer>) => API;
 
 // Exposes an API to a websocket endpoint using the protocol described in PROTOCOL.md
 export default function createServer(socket: WebSocket, apiFactory: APIFactory) {
-  const thisApi = { push, close };
+  const thisApi = { send, push, close };
 
   const api = apiFactory(thisApi);
   socket.addEventListener('message', onMessage);
   socket.addEventListener('close', close);
-  send({ ts: Date.now(), v: api.version });
+  send({ ts: Date.now(), v: (api.getVersion as APIMethod)?.() });
 
   return thisApi;
 

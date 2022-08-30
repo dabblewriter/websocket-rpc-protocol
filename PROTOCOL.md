@@ -17,7 +17,7 @@ When connecting to the server, a message will be sent to the client with the fol
 
 Each message sent by the client should be a request-response style message. The object sent should contain the
 following properties:
-* `r`: A **r**equest number, auto-incremented on the client, used to identify the response message.
+* `r`: A **r**equest number, positive integer auto-incremented on the client, used to identify the response message.
 * `a`: An **a**ction string, identifying the action being requested.
 * `d`: An optional **d**ata array containing the arguments sent to the action.
 
@@ -40,17 +40,17 @@ You should always check for the `err` property and handle errors appropriately.
 
 The server may push messages to a client when it knows the client needs it. These messages contain the following
 properties:
-* `p`: A **p**ush number indicating this is a push message sent to the client. A `1` indicates this message was sent
-       without being requested. A higher number may be used to associate this data with a specific request for it. For
-       example, an action `"listen"` might be used to start listening to data and the server could return id `5` in
-       response. Then any data that matches would be returned with **push** being 5.
+* `p`: A **p**ush number indicating this is a push message sent to the client. A `1` (a smaller boolean true) indicates
+       message was sent without being requested. A higher number may be used to associate this data with a specific
+       request for it. For example, an action `"listen"` might be used to start listening to data and the server could
+       return id `5` in response. Then any data that matches would be returned with **push** being 5.
 * `d`: The data for this **push** notification.
 
 -> `{"a":"listen","r":3,"d":["user_projects"]}`
 <- `{"r":3,"d":5`
 <- `{"p":5,"d":{"projectId":"abc123", ...}}`
 <- `{"p":5,"d":{"projectId":"abc123", ...}}`
-<- `{"p":1,"d":{"_connection":"closing"}}`
+<- `{"p":-1,"d":{"_connection":"closing"}}`
 
 ## That's it
 
