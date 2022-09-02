@@ -2,16 +2,19 @@
 export default async function createServer(socket, apiFactory) {
     const thisApi = { send, push, close };
     let api;
+    let preMessages = [];
+    socket.addEventListener('message', onMessage);
+    socket.addEventListener('close', close);
     try {
         api = await apiFactory(thisApi);
+        preMessages.forEach(processMessage);
+        preMessages = null;
     }
     catch (err) {
         console.error(err);
         send({ err: err.message });
-        socket.close();
+        close();
     }
-    socket.addEventListener('message', onMessage);
-    socket.addEventListener('close', close);
     send({ ts: Date.now(), v: api.getVersion?.() });
     return thisApi;
     function send(data) {
@@ -23,9 +26,13 @@ export default async function createServer(socket, apiFactory) {
     function close() {
         socket.removeEventListener('message', onMessage);
         socket.removeEventListener('close', close);
+        try {
+            socket.close();
+        }
+        catch (err) { }
     }
     function onMessage(event) {
-        processMessage('' + event.data);
+        api ? processMessage('' + event.data) : preMessages.push('' + event.data);
     }
     async function processMessage(message) {
         if (typeof message !== 'string') {

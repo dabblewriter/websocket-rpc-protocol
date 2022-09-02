@@ -14,17 +14,20 @@ export interface ServerAPI {
 export default async function createServer(socket: WebSocket, apiFactory: APIFactory) {
   const thisApi = { send, push, close };
   let api: API;
-
-  try {
-    api = await apiFactory(thisApi);
-  } catch (err) {
-    console.error(err);
-    send({ err: err.message });
-    socket.close();
-  }
+  let preMessages: string[] = [];
 
   socket.addEventListener('message', onMessage);
   socket.addEventListener('close', close);
+
+  try {
+    api = await apiFactory(thisApi);
+    preMessages.forEach(processMessage);
+    preMessages = null;
+  } catch (err) {
+    console.error(err);
+    send({ err: err.message });
+    close();
+  }
   send({ ts: Date.now(), v: (api.getVersion as APIMethod)?.() });
 
   return thisApi;
@@ -40,10 +43,13 @@ export default async function createServer(socket: WebSocket, apiFactory: APIFac
   function close() {
     socket.removeEventListener('message', onMessage);
     socket.removeEventListener('close', close);
+    try {
+      socket.close();
+    } catch(err) {}
   }
 
   function onMessage(event: MessageEvent) {
-    processMessage('' + event.data);
+    api ? processMessage('' + event.data) : preMessages.push('' + event.data);
   }
 
   async function processMessage(message: string) {
