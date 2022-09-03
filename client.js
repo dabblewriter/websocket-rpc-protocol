@@ -104,6 +104,7 @@ export default function createClient(url) {
                 }
                 if (data.ts) {
                     // Connected!
+                    connected = true;
                     localStorage.timeOffset = serverTimeOffset = data.ts - Date.now();
                     serverVersion = data.v;
                     const promises = [];
@@ -113,10 +114,7 @@ export default function createClient(url) {
                     onOpen.dispatch(options);
                     if (promises.length)
                         await Promise.all(promises);
-                    if (!connected) {
-                        connected = true;
-                        update();
-                    }
+                    update();
                     while (afterConnectedQueue.length) {
                         const { action, args, resolve, reject } = afterConnectedQueue.shift();
                         send(action, ...args).then(resolve, reject);
@@ -266,5 +264,8 @@ export default function createClient(url) {
         get,
         subscribe,
         onChange,
+        onOpen,
+        onClose,
+        onError,
     });
 }

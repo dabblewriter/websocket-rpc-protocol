@@ -149,6 +149,7 @@ export default function createClient<T = {}>(url: string): ClientAPI<T> & T {
 
         if (data.ts) {
           // Connected!
+          connected = true;
           localStorage.timeOffset = serverTimeOffset = data.ts - Date.now();
           serverVersion = data.v;
 
@@ -158,10 +159,7 @@ export default function createClient<T = {}>(url: string): ClientAPI<T> & T {
           }};
           onOpen.dispatch(options);
           if (promises.length) await Promise.all(promises);
-          if (!connected) {
-            connected = true;
-            update();
-          }
+          update();
           while (afterConnectedQueue.length) {
             const { action, args, resolve, reject } = afterConnectedQueue.shift() as Request;
             send(action, ...args).then(resolve, reject);
@@ -323,6 +321,9 @@ export default function createClient<T = {}>(url: string): ClientAPI<T> & T {
     get,
     subscribe,
     onChange,
+    onOpen,
+    onClose,
+    onError,
   }) as any;
 }
 
