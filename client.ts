@@ -6,6 +6,7 @@ const MAX_RETRY_BACKOFF = 4;
 const NOOP = () => {};
 
 export interface Client {
+  deviceId: string;
   online: boolean;
   connected: boolean;
   authed: boolean;
@@ -14,7 +15,7 @@ export interface Client {
 
 export type Unsubscribe = () => void;
 
-export interface ClientAPI {
+export interface ClientAPI<T = {}> {
   connect(): Promise<void>;
   disconnect(): void;
   close(): void;
@@ -29,15 +30,21 @@ export interface ClientAPI {
   get(): Client;
   subscribe(listener: (data: Client) => any): Unsubscribe;
   onChange: Signal<(data: Client) => any>;
+  onOpen: Signal<(options: {waitUntil(promise: Promise<any>): void}) => any>;
+  onClose: Signal<() => any>;
+  onError: Signal<() => any>;
 }
 
-export default function createClient<T = {}>(url: string, appVersion: string): ClientAPI & T {
+export default function createClient<T = {}>(url: string): ClientAPI<T> & T {
   const requests: {[r: string]: Request} = {};
   const afterConnectedQueue: Array<Request> = [];
   const afterAuthedQueue: Array<Request> = [];
   const onChange = signal<(client: Client) => any>();
   const deviceId = localStorage.deviceId as string || (localStorage.deviceId = createId());
   const listeners: {[r: number]: Signal} = {1: signal()};
+  const onOpen = signal<(options: {waitUntil(promise: Promise<any>): void}) => any>();
+  const onClose = signal<() => any>();
+  const onError = signal<(error: Error) => any>();
 
   let socket: WebSocket;
   let shouldConnect = false;
@@ -50,7 +57,7 @@ export default function createClient<T = {}>(url: string, appVersion: string): C
   let reconnectTimeout: any;
   let closing: any;
   let paused: boolean; // use for testing data drop and sync stability/recovery
-  let data: Client = { online, connected, authed, serverTimeOffset };
+  let data: Client = { deviceId, online, connected, authed, serverTimeOffset };
 
   window.addEventListener('online', onOnline);
   window.addEventListener('offline', onOffline);
@@ -63,7 +70,7 @@ export default function createClient<T = {}>(url: string, appVersion: string): C
 
   function update() {
     if (online !== data.online || connected !== data.connected || authed !== data.authed || serverTimeOffset !== data.serverTimeOffset) {
-      onChange.dispatch(data = { online, connected, authed, serverTimeOffset });
+      onChange.dispatch(data = { deviceId, online, connected, authed, serverTimeOffset });
     }
   }
 
@@ -95,13 +102,19 @@ export default function createClient<T = {}>(url: string, appVersion: string): C
         reject(err);
       }
 
-      socket.onerror = () => {
+      socket.onerror = (event: ErrorEvent) => {
+        onError.dispatch(event.error);
         reject();
         closeSocket();
       };
 
       socket.onopen = async () => {
-        await send('info', deviceId, appVersion);
+        const promises = [];
+        const options = { waitUntil: (promise: Promise<any>) => {
+          promises.push(promise);
+        }};
+        onOpen.dispatch(options);
+        if (promises.length) await Promise.all(promises);
         if (!connected) {
           connected = true;
           update();
@@ -124,6 +137,7 @@ export default function createClient<T = {}>(url: string, appVersion: string): C
           authed = false;
           update();
         }
+        onClose.dispatch();
 
         Object.keys(requests).forEach(key => {
           const request = requests[key];

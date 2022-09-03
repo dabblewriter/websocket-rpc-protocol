@@ -21,7 +21,7 @@ export default async function createServer(socket: WebSocket, apiFactory: APIFac
 
   try {
     api = await apiFactory(thisApi);
-    send({ ts: Date.now(), v: (api.getVersion as APIMethod)?.() });
+    send({ ts: Date.now() });
     preMessages.forEach(processMessage);
     preMessages = null;
   } catch (err) {

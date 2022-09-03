@@ -3,35 +3,51 @@ import { createId } from 'crypto-id';
 const BASE_RETRY_TIME = 1000;
 const MAX_RETRY_BACKOFF = 4;
 const NOOP = () => { };
-export default function createClient(url, appVersion) {
+export default function createClient(url) {
     const requests = {};
     const afterConnectedQueue = [];
     const afterAuthedQueue = [];
     const onChange = signal();
     const deviceId = localStorage.deviceId || (localStorage.deviceId = createId());
     const listeners = { 1: signal() };
+    const onOpen = signal();
+    const onClose = signal();
+    const onError = signal();
     let socket;
     let shouldConnect = false;
     let requestNumber = 1;
     let online = window.navigator.onLine;
     let connected = false;
     let authed = false;
-    let serverTimeOffset = parseInt(localStorage.timeOffset) || 0;
     let retries = 0;
     let reconnectTimeout;
     let closing;
     let paused; // use for testing data drop and sync stability/recovery
-    let data = { online, connected, authed, serverTimeOffset };
+    let data = { deviceId, online, connected, authed };
     window.addEventListener('online', onOnline);
     window.addEventListener('offline', onOffline);
+    const api = proxy({
+        connect,
+        disconnect,
+        close,
+        pause,
+        send,
+        sendAfterAuthed,
+        sendAndListen,
+        listen,
+        auth,
+        get,
+        subscribe,
+        onChange,
+    });
     function close() {
         window.removeEventListener('online', onOnline);
         window.removeEventListener('offline', onOffline);
         disconnect();
     }
     function update() {
-        if (online !== data.online || connected !== data.connected || authed !== data.authed || serverTimeOffset !== data.serverTimeOffset) {
-            onChange.dispatch(data = { online, connected, authed, serverTimeOffset });
+        if (online !== data.online || connected !== data.connected || authed !== data.authed) {
+            onChange.dispatch(data = { deviceId, online, connected, authed });
         }
     }
     function subscribe(listener) {
@@ -58,12 +74,19 @@ export default function createClient(url, appVersion) {
             catch (err) {
                 reject(err);
             }
-            socket.onerror = () => {
+            socket.onerror = (event) => {
+                onError.dispatch(event.error);
                 reject();
                 closeSocket();
             };
             socket.onopen = async () => {
-                await send('info', deviceId, appVersion);
+                const promises = [];
+                const options = { waitUntil: (promise) => {
+                        promises.push(promise);
+                    } };
+                onOpen.dispatch(options);
+                if (promises.length)
+                    await Promise.all(promises);
                 if (!connected) {
                     connected = true;
                     update();
@@ -85,6 +108,7 @@ export default function createClient(url, appVersion) {
                     authed = false;
                     update();
                 }
+                onClose.dispatch();
                 Object.keys(requests).forEach(key => {
                     const request = requests[key];
                     request.reject(new Error('CONNECTION_CLOSED'));
@@ -107,11 +131,6 @@ export default function createClient(url, appVersion) {
                 }
                 catch (err) {
                     console.error('Unparseable data from socket:', event.data);
-                    return;
-                }
-                if (data.ts) {
-                    localStorage.timeOffset = serverTimeOffset = data.ts - Date.now();
-                    update();
                     return;
                 }
                 if (data.p) {
@@ -216,12 +235,6 @@ export default function createClient(url, appVersion) {
         }
         return uid;
     }
-    function getNow() {
-        return Date.now() + serverTimeOffset;
-    }
-    function getDate() {
-        return new Date(getNow());
-    }
     function onOnline() {
         online = true;
         update();
@@ -240,20 +253,5 @@ export default function createClient(url, appVersion) {
             get: (obj, prop) => prop in obj ? obj[prop] : proxy(NOOP, name ? `${name}.${prop}` : prop),
         });
     }
-    return proxy({
-        connect,
-        disconnect,
-        close,
-        pause,
-        send,
-        sendAfterAuthed,
-        sendAndListen,
-        listen,
-        auth,
-        getNow,
-        getDate,
-        get,
-        subscribe,
-        onChange,
-    });
+    return api;
 }

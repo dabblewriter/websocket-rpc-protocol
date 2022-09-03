@@ -15,7 +15,6 @@ export default async function createServer(socket, apiFactory) {
         send({ err: err.message });
         close();
     }
-    send({ ts: Date.now(), v: api.getVersion?.() });
     return thisApi;
     function send(data) {
         socket.send(JSON.stringify(data));
