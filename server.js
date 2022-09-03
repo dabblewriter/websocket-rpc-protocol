@@ -1,5 +1,5 @@
 // Exposes an API to a websocket endpoint using the protocol described in PROTOCOL.md
-export default async function createServer(socket, apiFactory) {
+export default async function createServer(socket, version, apiFactory) {
     const thisApi = { send, push, close };
     let api;
     let preMessages = [];
@@ -7,6 +7,7 @@ export default async function createServer(socket, apiFactory) {
     socket.addEventListener('close', close);
     try {
         api = await apiFactory(thisApi);
+        send({ ts: Date.now(), v: version });
         preMessages.forEach(processMessage);
         preMessages = null;
     }

@@ -19,35 +19,23 @@ export default function createClient(url) {
     let online = window.navigator.onLine;
     let connected = false;
     let authed = false;
+    let serverTimeOffset = parseInt(localStorage.timeOffset) || 0;
+    let serverVersion = '';
     let retries = 0;
     let reconnectTimeout;
     let closing;
     let paused; // use for testing data drop and sync stability/recovery
-    let data = { deviceId, online, connected, authed };
+    let data = { deviceId, online, connected, authed, serverTimeOffset, serverVersion };
     window.addEventListener('online', onOnline);
     window.addEventListener('offline', onOffline);
-    const api = proxy({
-        connect,
-        disconnect,
-        close,
-        pause,
-        send,
-        sendAfterAuthed,
-        sendAndListen,
-        listen,
-        auth,
-        get,
-        subscribe,
-        onChange,
-    });
     function close() {
         window.removeEventListener('online', onOnline);
         window.removeEventListener('offline', onOffline);
         disconnect();
     }
     function update() {
-        if (online !== data.online || connected !== data.connected || authed !== data.authed) {
-            onChange.dispatch(data = { deviceId, online, connected, authed });
+        if (online !== data.online || connected !== data.connected || authed !== data.authed || serverTimeOffset !== data.serverTimeOffset || serverVersion !== data.serverVersion) {
+            onChange.dispatch(data = { deviceId, online, connected, authed, serverTimeOffset, serverVersion });
         }
     }
     function subscribe(listener) {
@@ -131,6 +119,12 @@ export default function createClient(url) {
                 }
                 catch (err) {
                     console.error('Unparseable data from socket:', event.data);
+                    return;
+                }
+                if (data.ts) {
+                    localStorage.timeOffset = serverTimeOffset = data.ts - Date.now();
+                    serverVersion = data.v;
+                    update();
                     return;
                 }
                 if (data.p) {
@@ -235,6 +229,12 @@ export default function createClient(url) {
         }
         return uid;
     }
+    function getNow() {
+        return Date.now() + serverTimeOffset;
+    }
+    function getDate() {
+        return new Date(getNow());
+    }
     function onOnline() {
         online = true;
         update();
@@ -253,5 +253,20 @@ export default function createClient(url) {
             get: (obj, prop) => prop in obj ? obj[prop] : proxy(NOOP, name ? `${name}.${prop}` : prop),
         });
     }
-    return api;
+    return proxy({
+        connect,
+        disconnect,
+        close,
+        pause,
+        send,
+        sendAfterAuthed,
+        sendAndListen,
+        listen,
+        auth,
+        getNow,
+        getDate,
+        get,
+        subscribe,
+        onChange,
+    });
 }

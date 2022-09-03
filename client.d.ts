@@ -4,6 +4,8 @@ export interface Client {
     online: boolean;
     connected: boolean;
     authed: boolean;
+    serverTimeOffset: number;
+    serverVersion: string;
 }
 export declare type Unsubscribe = () => void;
 export interface ClientAPI<T = {}> {
@@ -16,6 +18,8 @@ export interface ClientAPI<T = {}> {
     listen<T extends GenericFunction>(listener: T): Unsubscribe;
     auth(idToken?: string): Promise<string>;
     pause(pause?: boolean): void;
+    getNow(): number;
+    getDate(): Date;
     get(): Client;
     subscribe(listener: (data: Client) => any): Unsubscribe;
     onChange: Signal<(data: Client) => any>;

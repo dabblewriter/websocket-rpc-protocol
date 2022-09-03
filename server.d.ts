@@ -8,7 +8,7 @@ export interface ServerAPI {
     push: (data: any, forRequest?: number) => void;
     close: () => void;
 }
-export default function createServer(socket: WebSocket, apiFactory: APIFactory): Promise<{
+export default function createServer(socket: WebSocket, version: string, apiFactory: APIFactory): Promise<{
     send: (data: any) => void;
     push: (data: any, forRequest?: number) => void;
     close: () => void;

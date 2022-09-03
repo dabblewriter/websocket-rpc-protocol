@@ -11,7 +11,7 @@ export interface ServerAPI {
 }
 
 // Exposes an API to a websocket endpoint using the protocol described in PROTOCOL.md
-export default async function createServer(socket: WebSocket, apiFactory: APIFactory) {
+export default async function createServer(socket: WebSocket, version: string, apiFactory: APIFactory) {
   const thisApi = { send, push, close };
   let api: API;
   let preMessages: string[] = [];
@@ -21,7 +21,7 @@ export default async function createServer(socket: WebSocket, apiFactory: APIFac
 
   try {
     api = await apiFactory(thisApi);
-    send({ ts: Date.now() });
+    send({ ts: Date.now(), v: version });
     preMessages.forEach(processMessage);
     preMessages = null;
   } catch (err) {

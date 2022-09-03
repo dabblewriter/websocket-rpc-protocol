@@ -11,6 +11,7 @@ export interface Client {
   connected: boolean;
   authed: boolean;
   serverTimeOffset: number;
+  serverVersion: string;
 }
 
 export type Unsubscribe = () => void;
@@ -53,11 +54,12 @@ export default function createClient<T = {}>(url: string): ClientAPI<T> & T {
   let connected = false;
   let authed = false;
   let serverTimeOffset = parseInt(localStorage.timeOffset) || 0;
+  let serverVersion = '';
   let retries = 0;
   let reconnectTimeout: any;
   let closing: any;
   let paused: boolean; // use for testing data drop and sync stability/recovery
-  let data: Client = { deviceId, online, connected, authed, serverTimeOffset };
+  let data: Client = { deviceId, online, connected, authed, serverTimeOffset, serverVersion };
 
   window.addEventListener('online', onOnline);
   window.addEventListener('offline', onOffline);
@@ -69,8 +71,8 @@ export default function createClient<T = {}>(url: string): ClientAPI<T> & T {
   }
 
   function update() {
-    if (online !== data.online || connected !== data.connected || authed !== data.authed || serverTimeOffset !== data.serverTimeOffset) {
-      onChange.dispatch(data = { deviceId, online, connected, authed, serverTimeOffset });
+    if (online !== data.online || connected !== data.connected || authed !== data.authed || serverTimeOffset !== data.serverTimeOffset  || serverVersion !== data.serverVersion) {
+      onChange.dispatch(data = { deviceId, online, connected, authed, serverTimeOffset, serverVersion });
     }
   }
 
@@ -166,6 +168,7 @@ export default function createClient<T = {}>(url: string): ClientAPI<T> & T {
 
         if (data.ts) {
           localStorage.timeOffset = serverTimeOffset = data.ts - Date.now();
+          serverVersion = data.v;
           update();
           return;
         }
