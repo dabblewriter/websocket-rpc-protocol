@@ -67,25 +67,6 @@ export default function createClient(url) {
                 reject();
                 closeSocket();
             };
-            socket.onopen = async () => {
-                const promises = [];
-                const options = { waitUntil: (promise) => {
-                        promises.push(promise);
-                    } };
-                onOpen.dispatch(options);
-                if (promises.length)
-                    await Promise.all(promises);
-                if (!connected) {
-                    connected = true;
-                    update();
-                }
-                while (afterConnectedQueue.length) {
-                    const { action, args, resolve, reject } = afterConnectedQueue.shift();
-                    send(action, ...args).then(resolve, reject);
-                }
-                retries = 0;
-                resolve();
-            };
             socket.onclose = () => {
                 clearTimeout(closing);
                 closing = null;
@@ -110,7 +91,7 @@ export default function createClient(url) {
                     }, backoff);
                 }
             };
-            socket.onmessage = event => {
+            socket.onmessage = async (event) => {
                 if (paused)
                     return;
                 let data;
@@ -122,9 +103,26 @@ export default function createClient(url) {
                     return;
                 }
                 if (data.ts) {
+                    // Connected!
                     localStorage.timeOffset = serverTimeOffset = data.ts - Date.now();
                     serverVersion = data.v;
-                    update();
+                    const promises = [];
+                    const options = { waitUntil: (promise) => {
+                            promises.push(promise);
+                        } };
+                    onOpen.dispatch(options);
+                    if (promises.length)
+                        await Promise.all(promises);
+                    if (!connected) {
+                        connected = true;
+                        update();
+                    }
+                    while (afterConnectedQueue.length) {
+                        const { action, args, resolve, reject } = afterConnectedQueue.shift();
+                        send(action, ...args).then(resolve, reject);
+                    }
+                    retries = 0;
+                    resolve();
                     return;
                 }
                 if (data.p) {

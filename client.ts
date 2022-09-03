@@ -110,25 +110,6 @@ export default function createClient<T = {}>(url: string): ClientAPI<T> & T {
         closeSocket();
       };
 
-      socket.onopen = async () => {
-        const promises = [];
-        const options = { waitUntil: (promise: Promise<any>) => {
-          promises.push(promise);
-        }};
-        onOpen.dispatch(options);
-        if (promises.length) await Promise.all(promises);
-        if (!connected) {
-          connected = true;
-          update();
-        }
-        while (afterConnectedQueue.length) {
-          const { action, args, resolve, reject } = afterConnectedQueue.shift() as Request;
-          send(action, ...args).then(resolve, reject);
-        }
-        retries = 0;
-        resolve();
-      };
-
       socket.onclose = () => {
         clearTimeout(closing);
         closing = null;
@@ -156,7 +137,7 @@ export default function createClient<T = {}>(url: string): ClientAPI<T> & T {
         }
       };
 
-      socket.onmessage = event => {
+      socket.onmessage = async event => {
         if (paused) return;
         let data: any;
         try {
@@ -167,9 +148,26 @@ export default function createClient<T = {}>(url: string): ClientAPI<T> & T {
         }
 
         if (data.ts) {
+          // Connected!
           localStorage.timeOffset = serverTimeOffset = data.ts - Date.now();
           serverVersion = data.v;
-          update();
+
+          const promises = [];
+          const options = { waitUntil: (promise: Promise<any>) => {
+            promises.push(promise);
+          }};
+          onOpen.dispatch(options);
+          if (promises.length) await Promise.all(promises);
+          if (!connected) {
+            connected = true;
+            update();
+          }
+          while (afterConnectedQueue.length) {
+            const { action, args, resolve, reject } = afterConnectedQueue.shift() as Request;
+            send(action, ...args).then(resolve, reject);
+          }
+          retries = 0;
+          resolve();
           return;
         }
 
