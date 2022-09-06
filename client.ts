@@ -192,6 +192,7 @@ export default function createClient<T = {}>(url: string): ClientAPI<T> & T {
 
   function disconnect() {
     shouldConnect = false;
+    clearTimeout(reconnectTimeout);
     closeSocket();
   }
 
