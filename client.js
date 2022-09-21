@@ -2,7 +2,6 @@ import { signal } from 'easy-signal';
 import { createId } from 'crypto-id';
 const BASE_RETRY_TIME = 1000;
 const MAX_RETRY_BACKOFF = 4;
-const NOOP = () => { };
 export default function createClient(url) {
     const requests = {};
     const afterConnectedQueue = [];
@@ -148,6 +147,7 @@ export default function createClient(url) {
     }
     function disconnect() {
         shouldConnect = false;
+        clearTimeout(reconnectTimeout);
         closeSocket();
     }
     function pause(pause = true) {
@@ -163,7 +163,7 @@ export default function createClient(url) {
         if (socket)
             socket.onclose();
     }
-    function listen(listener) {
+    function onMessage(listener) {
         return listeners[1](listener);
     }
     async function send(action, ...args) {
@@ -175,14 +175,27 @@ export default function createClient(url) {
                 afterConnectedQueue.push({ action, args, resolve, reject });
             });
         }
-        let onMessage;
-        if (typeof args[args.length - 1] === 'function') {
-            onMessage = args.pop();
-        }
         while (args.length && args[args.length - 1] === undefined)
             args.pop();
         const r = requestNumber++;
         return new Promise((resolve, reject) => {
+            let onMessage, abortSignal;
+            if (typeof args[args.length - 1] === 'function') {
+                onMessage = args.pop();
+                if (args[args.length - 1] instanceof AbortSignal) {
+                    abortSignal = args.pop();
+                    abortSignal.onabort = () => {
+                        try {
+                            if (abortSignal.reason)
+                                reject(abortSignal.reason);
+                            else
+                                resolve();
+                            send('_abort', r);
+                        }
+                        catch (err) { }
+                    };
+                }
+            }
             requests[r] = { action, args, resolve, reject, onMessage };
             try {
                 socket.send(JSON.stringify({ r, a: action, d: args.length ? args : undefined }));
@@ -203,17 +216,6 @@ export default function createClient(url) {
         return new Promise((resolve, reject) => {
             afterAuthedQueue.push({ action, args, resolve, reject });
         });
-    }
-    async function sendAndListen(action, ...args) {
-        const listener = args.pop();
-        const ref = await send(action, ...args);
-        listeners[ref] = signal();
-        const unsubscribe = listeners[ref](listener);
-        return async () => {
-            unsubscribe();
-            delete listeners[ref];
-            await send('unlisten', ref);
-        };
     }
     async function auth(idToken) {
         const uid = await send('auth', idToken);
@@ -246,18 +248,18 @@ export default function createClient(url) {
     function proxy(target, name) {
         return new Proxy(target, {
             apply: (_, __, args) => send(name, ...args),
-            get: (obj, prop) => prop in obj ? obj[prop] : proxy(NOOP, name ? `${name}.${prop}` : prop),
+            get: (obj, prop) => prop in obj ? obj[prop] : (obj[prop] = proxy(() => { }, name ? `${name}.${prop}` : prop)),
         });
     }
-    return proxy({
+    return {
+        api: proxy({}),
         connect,
         disconnect,
         close,
         pause,
         send,
         sendAfterAuthed,
-        sendAndListen,
-        listen,
+        onMessage,
         auth,
         getNow,
         getDate,
@@ -267,5 +269,5 @@ export default function createClient(url) {
         onOpen,
         onClose,
         onError,
-    });
+    };
 }

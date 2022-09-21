@@ -12,10 +12,14 @@ export interface ClientAPI<T = {}> {
     connect(): Promise<void>;
     disconnect(): void;
     close(): void;
-    send(action: string, ...rest: any[]): Promise<any>;
-    sendAfterAuthed(action: string, ...rest: any[]): Promise<any>;
-    sendAndListen<T extends GenericFunction>(action: string, ...args: [...any, T]): Promise<Unsubscribe>;
-    listen<T extends GenericFunction>(listener: T): Unsubscribe;
+    api: T;
+    send<T = any>(action: string, ...args: [...any[], AbortSignal, GenericFunction]): Promise<T>;
+    send<T = any>(action: string, ...args: [...any[], GenericFunction]): Promise<T>;
+    send<T = any>(action: string, ...args: any[]): Promise<T>;
+    sendAfterAuthed<T = any>(action: string, ...args: [...any[], AbortSignal, GenericFunction]): Promise<T>;
+    sendAfterAuthed<T = any>(action: string, ...args: [...any[], GenericFunction]): Promise<T>;
+    sendAfterAuthed<T = any>(action: string, ...args: any[]): Promise<T>;
+    onMessage<T extends GenericFunction>(listener: T): Unsubscribe;
     auth(idToken?: string): Promise<string>;
     pause(pause?: boolean): void;
     getNow(): number;
@@ -29,6 +33,6 @@ export interface ClientAPI<T = {}> {
     onClose: Signal<() => any>;
     onError: Signal<() => any>;
 }
-export default function createClient<T = {}>(url: string): ClientAPI<T> & T;
+export default function createClient<T = {}>(url: string): ClientAPI<T>;
 declare type GenericFunction = (...args: any[]) => any;
 export {};

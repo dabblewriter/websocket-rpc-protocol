@@ -24,8 +24,8 @@ following properties:
 The message sent back by the server in response to this request will contain the following properties:
 * `r`: The **r**equest number sent by the client.
 * `d`: The optional **d**ata result returned from the method.
-* `s`: An optional **s**tream flag indicating partial data for a request that is streaming data. These requests must
-       end with a terminating message that does not contain `s`.
+* `s`: An optional **s**tream flag (the number `1`) indicating partial data for a request that is streaming data. These
+       requests must end with a terminating message that does not contain `s`.
 * `err`: The **err**or returned from the method if one was thrown.
 
 Each request will call a remote function by the name of the **action**, passing the arguments defined in **data**, and
@@ -40,17 +40,28 @@ You should always check for the `err` property and handle errors appropriately.
 
 The server may push messages to a client when it knows the client needs it. These messages contain the following
 properties:
-* `p`: A **p**ush number indicating this is a push message sent to the client. A `1` (a smaller boolean true) indicates
-       message was sent without being requested. A higher number may be used to associate this data with a specific
-       request for it. For example, an action `"listen"` might be used to start listening to data and the server could
-       return id `5` in response. Then any data that matches would be returned with **push** being 5.
+* `p`: A **p**ush flag indicating this is a push message sent to the client.
 * `d`: The data for this **push** notification.
 
--> `{"a":"listen","r":3,"d":["user_projects"]}`
-<- `{"r":3,"d":5`
-<- `{"p":5,"d":{"projectId":"abc123", ...}}`
-<- `{"p":5,"d":{"projectId":"abc123", ...}}`
-<- `{"p":-1,"d":{"_connection":"closing"}}`
+-> `{"a":"listen","r":3,"d":["these","pubsub","topics"]}`
+<- `{"r":3}`
+<- `{"p":1,"d":{"subject":"pubsub","payload":{...}}`
+<- `{"p":1,"d":{"subject":"topcis","payload":{...}}`
+
+## Targeted Message Handlers
+
+Rather than a single stream of messages being pushed, you may want to handle individual streams. You can do this using
+the stream part of this protocol. You may do so by making an initial request and then leaving it open, slowly streaming
+the response back over a long period. An open stream request may be aborted with a special action defined by your server
+such as an `_abort` action.
+
+-> `{"a":"getPresences","r":3,"d":["roomID123ABC"]}`
+<- `{"r":3}`
+<- `{"r":3,"s":1,"d":{"uid":"3jf9","status":"online"}}`
+<- `{"r":3,"s":1,"d":{"uid":"0toe","status":"offline"}}`
+-> `{"a":"_abort","r":4,"d":[3]}`
+<- `{"r":3}`
+<- `{"r":4,"d":true}`
 
 ## That's it
 

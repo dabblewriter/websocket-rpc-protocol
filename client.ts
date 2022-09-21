@@ -3,7 +3,6 @@ import { createId } from 'crypto-id';
 
 const BASE_RETRY_TIME = 1000;
 const MAX_RETRY_BACKOFF = 4;
-const NOOP = () => {};
 
 export interface Client {
   deviceId: string;
@@ -20,10 +19,14 @@ export interface ClientAPI<T = {}> {
   connect(): Promise<void>;
   disconnect(): void;
   close(): void;
-  send(action: string, ...rest: any[]): Promise<any>;
-  sendAfterAuthed(action: string, ...rest: any[]): Promise<any>;
-  sendAndListen<T extends GenericFunction>(action: string, ...args: [...any, T]): Promise<Unsubscribe>;
-  listen<T extends GenericFunction>(listener: T): Unsubscribe;
+  api: T;
+  send<T = any>(action: string, ...args: [...any[], AbortSignal, GenericFunction]): Promise<T>;
+  send<T = any>(action: string, ...args: [...any[], GenericFunction]): Promise<T>;
+  send<T = any>(action: string, ...args: any[]): Promise<T>;
+  sendAfterAuthed<T = any>(action: string, ...args: [...any[], AbortSignal, GenericFunction]): Promise<T>;
+  sendAfterAuthed<T = any>(action: string, ...args: [...any[], GenericFunction]): Promise<T>;
+  sendAfterAuthed<T = any>(action: string, ...args: any[]): Promise<T>;
+  onMessage<T extends GenericFunction>(listener: T): Unsubscribe;
   auth(idToken?: string): Promise<string>;
   pause(pause?: boolean): void;
   getNow(): number;
@@ -36,7 +39,7 @@ export interface ClientAPI<T = {}> {
   onError: Signal<() => any>;
 }
 
-export default function createClient<T = {}>(url: string): ClientAPI<T> & T {
+export default function createClient<T = {}>(url: string): ClientAPI<T> {
   const requests: {[r: string]: Request} = {};
   const afterConnectedQueue: Array<Request> = [];
   const afterAuthedQueue: Array<Request> = [];
@@ -209,10 +212,11 @@ export default function createClient<T = {}>(url: string): ClientAPI<T> & T {
     if (socket) (socket.onclose as any)();
   }
 
-  function listen<T extends GenericFunction>(listener: T) {
+  function onMessage<T extends GenericFunction>(listener: T) {
     return listeners[1](listener);
   }
 
+  function send<T = any>(action: string, ...args: any[]): Promise<T>;
   async function send(action: string, ...args: any[]): Promise<any> {
     if (!socket || socket.readyState > 1 || closing) {
       return Promise.reject(new Error('CONNECTION_CLOSED'));
@@ -222,15 +226,24 @@ export default function createClient<T = {}>(url: string): ClientAPI<T> & T {
       });
     }
 
-    let onMessage: GenericFunction;
-    if (typeof args[args.length - 1] === 'function') {
-      onMessage = args.pop();
-    }
-
     while (args.length && args[args.length - 1] === undefined) args.pop();
 
     const r = requestNumber++;
-    return new Promise((resolve, reject) => {
+    return new Promise<void>((resolve, reject) => {
+      let onMessage: GenericFunction, abortSignal: AbortSignal;
+      if (typeof args[args.length - 1] === 'function') {
+        onMessage = args.pop();
+        if (args[args.length - 1] instanceof AbortSignal) {
+          abortSignal = args.pop();
+          abortSignal.onabort = () => {
+            try {
+              if (abortSignal.reason) reject(abortSignal.reason);
+              else resolve();
+              send('_abort', r);
+            } catch (err) {}
+          };
+        }
+      }
       requests[r] = { action, args, resolve, reject, onMessage };
       try {
         socket.send(JSON.stringify({ r, a: action, d: args.length ? args : undefined }));
@@ -252,19 +265,6 @@ export default function createClient<T = {}>(url: string): ClientAPI<T> & T {
     return new Promise((resolve, reject) => {
       afterAuthedQueue.push({ action, args, resolve, reject });
     });
-  }
-
-  async function sendAndListen<T extends GenericFunction>(action: string, ...args: [...any, T]): Promise<Unsubscribe> {
-    const listener = args.pop() as T;
-    const ref = await send(action, ...args);
-    listeners[ref] = signal();
-    const unsubscribe = listeners[ref](listener);
-
-    return async () => {
-      unsubscribe();
-      delete listeners[ref];
-      await send('unlisten', ref);
-    };
   }
 
   async function auth(idToken?: string) {
@@ -303,19 +303,19 @@ export default function createClient<T = {}>(url: string): ClientAPI<T> & T {
   function proxy(target: any, name?: string) {
     return new Proxy(target, {
       apply: (_, __, args) => send(name, ...args),
-      get: (obj, prop: string) => prop in obj ? obj[prop] : proxy(NOOP, name ? `${name}.${prop}` : prop),
+      get: (obj, prop: string) => prop in obj ? obj[prop] : (obj[prop] = proxy(() => {}, name ? `${name}.${prop}` : prop)),
     });
   }
 
-  return proxy({
+  return {
+    api: proxy({}),
     connect,
     disconnect,
     close,
     pause,
     send,
     sendAfterAuthed,
-    sendAndListen,
-    listen,
+    onMessage,
     auth,
     getNow,
     getDate,
@@ -325,7 +325,7 @@ export default function createClient<T = {}>(url: string): ClientAPI<T> & T {
     onOpen,
     onClose,
     onError,
-  }) as any;
+  };
 }
 
 type GenericFunction = (...args: any[]) => any;

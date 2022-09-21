@@ -3,6 +3,7 @@ export default async function createServer(socket, version, apiFactory) {
     const thisApi = { send, push, close };
     let api;
     let preMessages = [];
+    const streamingRequests = new Map();
     socket.addEventListener('message', onMessage);
     socket.addEventListener('close', close);
     try {
@@ -58,6 +59,13 @@ export default async function createServer(socket, version, apiFactory) {
             const message = typeof err === 'string' ? err : err.message;
             return send({ r, err: message });
         }
+        if (a === '_abort') {
+            const otherR = d[0];
+            const success = streamingRequests.get(otherR)?.(true) || false;
+            if (success)
+                send({ r: otherR });
+            return send({ r, d: success });
+        }
         if (a[0] === '_' || typeof apiFunction !== 'function') {
             return sendError('Unknown action');
         }
@@ -68,7 +76,8 @@ export default async function createServer(socket, version, apiFactory) {
                 // stream, send an undefined result at the end. An optional error signal attached will allow for an error to end
                 // the stream.
                 const signal = result;
-                const unsubscribe = signal((d) => {
+                const unsubscribers = [];
+                unsubscribers.push(signal((d) => {
                     if (d === undefined) {
                         unsubscribe();
                         send({ r });
@@ -76,15 +85,23 @@ export default async function createServer(socket, version, apiFactory) {
                     else {
                         send({ r, s: 1, d });
                     }
-                });
-                const { error } = signal;
+                }));
+                const { error, abort } = signal;
                 if (typeof error === 'function' && typeof error.dispatch === 'function') {
-                    const errorUnsub = error((err) => {
+                    unsubscribers.push(error((err) => {
                         sendError(err);
                         unsubscribe();
-                        errorUnsub();
-                    });
+                    }));
                 }
+                const unsubscribe = (aborted) => {
+                    if (!streamingRequests.delete(r))
+                        return false;
+                    if (aborted && abort)
+                        abort.dispatch();
+                    unsubscribers.forEach(u => u());
+                    return true;
+                };
+                streamingRequests.set(r, unsubscribe);
             }
             else {
                 send({ r, d: result });
