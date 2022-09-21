@@ -1,5 +1,6 @@
 import { signal } from 'easy-signal';
 import { createId } from 'crypto-id';
+const CONNECTION_TIMEOUT = 5000;
 const BASE_RETRY_TIME = 1000;
 const MAX_RETRY_BACKOFF = 4;
 export default function createClient(url) {
@@ -22,6 +23,7 @@ export default function createClient(url) {
     let serverVersion = '';
     let retries = 0;
     let reconnectTimeout;
+    let connectionTimeout;
     let closing;
     let paused; // use for testing data drop and sync stability/recovery
     let data = { deviceId, online, connected, authed, serverTimeOffset, serverVersion };
@@ -47,6 +49,7 @@ export default function createClient(url) {
     }
     function connect() {
         clearTimeout(reconnectTimeout);
+        clearTimeout(connectionTimeout);
         return new Promise((resolve, reject) => {
             shouldConnect = true;
             if (!online) {
@@ -57,6 +60,11 @@ export default function createClient(url) {
             }
             try {
                 socket = new WebSocket(url);
+                connectionTimeout = setTimeout(() => {
+                    if (socket.readyState !== WebSocket.CLOSED && socket.readyState !== WebSocket.CLOSING) {
+                        socket.close();
+                    }
+                }, CONNECTION_TIMEOUT);
             }
             catch (err) {
                 reject(err);
@@ -103,6 +111,8 @@ export default function createClient(url) {
                 }
                 if (data.ts) {
                     // Connected!
+                    clearTimeout(connectionTimeout);
+                    retries = 0;
                     connected = true;
                     localStorage.timeOffset = serverTimeOffset = data.ts - Date.now();
                     serverVersion = data.v;
@@ -118,7 +128,6 @@ export default function createClient(url) {
                         const { action, args, resolve, reject } = afterConnectedQueue.shift();
                         send(action, ...args).then(resolve, reject);
                     }
-                    retries = 0;
                     resolve();
                     return;
                 }
@@ -148,6 +157,7 @@ export default function createClient(url) {
     function disconnect() {
         shouldConnect = false;
         clearTimeout(reconnectTimeout);
+        clearTimeout(connectionTimeout);
         closeSocket();
     }
     function pause(pause = true) {
