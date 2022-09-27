@@ -107,7 +107,7 @@ export default function createClient<T = {}>(url: string): ClientAPI<T> {
       try {
         socket = new WebSocket(url);
         connectionTimeout = setTimeout(() => {
-          if (socket.readyState !== WebSocket.CLOSED && socket.readyState !== WebSocket.CLOSING) {
+          if (socket && socket.readyState !== WebSocket.CLOSED && socket.readyState !== WebSocket.CLOSING) {
             socket.close();
           }
         }, CONNECTION_TIMEOUT);

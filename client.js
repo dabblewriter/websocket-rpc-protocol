@@ -61,7 +61,7 @@ export default function createClient(url) {
             try {
                 socket = new WebSocket(url);
                 connectionTimeout = setTimeout(() => {
-                    if (socket.readyState !== WebSocket.CLOSED && socket.readyState !== WebSocket.CLOSING) {
+                    if (socket && socket.readyState !== WebSocket.CLOSED && socket.readyState !== WebSocket.CLOSING) {
                         socket.close();
                     }
                 }, CONNECTION_TIMEOUT);
