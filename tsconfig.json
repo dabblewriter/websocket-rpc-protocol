@@ -13,6 +13,6 @@
     "resolveJsonModule": true,
     "outDir": "./"
   },
-  "include": ["server.ts", "client.ts"],
+  "include": ["src/server.ts", "src/client.ts"],
   "exclude": ["node_modules"]
 }
