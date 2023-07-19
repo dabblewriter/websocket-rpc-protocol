@@ -76,7 +76,7 @@ export default async function createServer(version: string, apiFactory: APIFacto
     }
 
     try {
-      const result = await apiFunction(...d);
+      const result = await apiFunction(socket, ...d);
       if (typeof result === 'function' && typeof result.dispatch === 'function') {
         // result is a signal with the library easy-signal, used to stream multiple results over time. To end the pusedo
         // stream, send an undefined result at the end. An optional error signal attached will allow for an error to end
