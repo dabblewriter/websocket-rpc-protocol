@@ -1,4 +1,6 @@
+;
 // Exposes an API to a websocket endpoint using the protocol described in PROTOCOL.md
+// use server-single if one server can handle multiple clients without state, otherwise use server
 export default function createServer(version, api) {
     const thisApi = { send, push, onConnect, onMessage };
     const streamingRequests = new Map();
@@ -92,3 +94,4 @@ export default function createServer(version, api) {
         }
     }
 }
+//# sourceMappingURL=server-single.js.map

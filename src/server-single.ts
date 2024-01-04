@@ -1,7 +1,9 @@
 import { Signal, Unsubscriber } from 'easy-signal';
 
 export type APIMethod = (ws: WebSocket, ...args: any[]) => any;
-export type API = {[key: string]: APIMethod | API};
+export interface API {
+  [key: string]: APIMethod | API
+};
 
 export interface ServerAPI {
   onConnect: (socket: WebSocket) => void;
@@ -11,7 +13,8 @@ export interface ServerAPI {
 }
 
 // Exposes an API to a websocket endpoint using the protocol described in PROTOCOL.md
-export default function createServer(version: string, api: API) {
+// use server-single if one server can handle multiple clients without state, otherwise use server
+export default function createServer(version: string, api: API): ServerAPI {
   const thisApi = { send, push, onConnect, onMessage };
   const streamingRequests = new Map<number, (aborted?: boolean) => boolean>();
   return thisApi;

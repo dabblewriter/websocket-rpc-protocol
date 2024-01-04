@@ -1,4 +1,5 @@
 // Exposes an API to a websocket endpoint using the protocol described in PROTOCOL.md
+// Use server to handle 1 API per socket for state, use server-single if one server can handle multiple sockets
 export default async function createServer(socket, version, apiFactory) {
     const thisApi = { send, push, close };
     let api;
@@ -112,3 +113,4 @@ export default async function createServer(socket, version, apiFactory) {
         }
     }
 }
+//# sourceMappingURL=server.js.map

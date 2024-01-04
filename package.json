@@ -4,6 +4,7 @@
   "description": "A JSON RPC protocol for working over websockets. Sheds the weight of JSON RPC to simplify argument names and adds features.",
   "scripts": {
     "build": "tsc",
+    "watch": "tsc -w",
     "prepare": "tsc"
   },
   "repository": {

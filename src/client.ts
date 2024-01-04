@@ -1,5 +1,5 @@
-import { signal, Signal } from 'easy-signal';
 import { createId } from 'crypto-id';
+import { signal, Signal } from 'easy-signal';
 
 const CONNECTION_TIMEOUT = 5000;
 const BASE_RETRY_TIME = 1000;
@@ -218,7 +218,7 @@ export default function createClient<T = {}>(url: string): ClientAPI<T> {
     connected = false;
     authed = false;
     update();
-    socket.close();
+    socket.close(1000);
     if (socket) (socket.onclose as any)();
   }
 

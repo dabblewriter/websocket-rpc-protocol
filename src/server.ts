@@ -11,6 +11,7 @@ export interface ServerAPI {
 }
 
 // Exposes an API to a websocket endpoint using the protocol described in PROTOCOL.md
+// Use server to handle 1 API per socket for state, use server-single if one server can handle multiple sockets
 export default async function createServer(socket: WebSocket, version: string, apiFactory: APIFactory) {
   const thisApi = { send, push, close };
   let api: API;
