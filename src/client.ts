@@ -1,6 +1,6 @@
 import { createId } from 'crypto-id';
 import { eventSignal, EventSignal } from 'easy-signal/eventSignal';
-import { reactiveSignal, ReactiveSignalSubscriber, subscribe as signalSubscribe } from 'easy-signal/reactiveSignal';
+import { reactiveSignal, subscribe as signalSubscribe } from 'easy-signal/reactiveSignal';
 
 const CONNECTION_TIMEOUT = 5000;
 const BASE_RETRY_TIME = 1000;
@@ -34,7 +34,7 @@ export interface ClientAPI<T = {}> {
   getNow(): number;
   getDate(): Date;
   get(): Client;
-  subscribe(subscriber: ReactiveSignalSubscriber<Client>): void;
+  subscribe(subscriber: (data: Client) => void): Unsubscribe;
   onOpen: EventSignal<(options: { waitUntil(promise: Promise<any>): void }) => void>;
   onClose: EventSignal<() => void>;
   onError: EventSignal<(error: Error) => void>;
