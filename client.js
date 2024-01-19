@@ -1,5 +1,5 @@
 import { createId } from 'crypto-id';
-import { signal } from 'easy-signal';
+import { eventSignal } from 'easy-signal/eventSignal';
 const CONNECTION_TIMEOUT = 5000;
 const BASE_RETRY_TIME = 1000;
 const MAX_RETRY_BACKOFF = 4;
@@ -7,12 +7,12 @@ export default function createClient(url) {
     const requests = {};
     const afterConnectedQueue = [];
     const afterAuthedQueue = [];
-    const onChange = signal();
     const deviceId = localStorage.deviceId || (localStorage.deviceId = createId());
-    const listeners = { 1: signal() };
-    const onOpen = signal();
-    const onClose = signal();
-    const onError = signal();
+    const subscribe = eventSignal();
+    const onMessage = eventSignal();
+    const onOpen = eventSignal();
+    const onClose = eventSignal();
+    const onError = eventSignal();
     let socket;
     let shouldConnect = false;
     let requestNumber = 1;
@@ -36,13 +36,8 @@ export default function createClient(url) {
     }
     function update() {
         if (online !== data.online || connected !== data.connected || authed !== data.authed || serverTimeOffset !== data.serverTimeOffset || serverVersion !== data.serverVersion) {
-            onChange.dispatch(data = { deviceId, online, connected, authed, serverTimeOffset, serverVersion });
+            subscribe(data = { deviceId, online, connected, authed, serverTimeOffset, serverVersion });
         }
-    }
-    function subscribe(listener) {
-        const unsub = onChange(listener);
-        listener(data);
-        return unsub;
     }
     function get() {
         return data;
@@ -70,7 +65,7 @@ export default function createClient(url) {
                 reject(err);
             }
             socket.onerror = (event) => {
-                onError.dispatch(event.error);
+                onError(event.error);
                 reject();
                 closeSocket();
             };
@@ -84,7 +79,7 @@ export default function createClient(url) {
                     authed = false;
                     update();
                 }
-                onClose.dispatch();
+                onClose();
                 Object.keys(requests).forEach(key => {
                     const request = requests[key];
                     request.reject(new Error('CONNECTION_CLOSED'));
@@ -120,7 +115,7 @@ export default function createClient(url) {
                     const options = { waitUntil: (promise) => {
                             promises.push(promise);
                         } };
-                    onOpen.dispatch(options);
+                    onOpen(options);
                     if (promises.length)
                         await Promise.all(promises);
                     update();
@@ -132,7 +127,7 @@ export default function createClient(url) {
                     return;
                 }
                 if (data.p) {
-                    listeners[data.p]?.dispatch(data.d);
+                    onMessage(data.d);
                     return;
                 }
                 const request = requests[data.r];
@@ -172,9 +167,6 @@ export default function createClient(url) {
         socket.close(1000);
         if (socket)
             socket.onclose();
-    }
-    function onMessage(listener) {
-        return listeners[1](listener);
     }
     async function send(action, ...args) {
         if (!socket || socket.readyState > 1 || closing) {
@@ -269,13 +261,12 @@ export default function createClient(url) {
         pause,
         send,
         sendAfterAuthed,
-        onMessage,
         auth,
         getNow,
         getDate,
         get,
         subscribe,
-        onChange,
+        onMessage,
         onOpen,
         onClose,
         onError,

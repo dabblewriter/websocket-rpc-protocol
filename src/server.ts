@@ -1,4 +1,4 @@
-import { Signal, Unsubscriber } from 'easy-signal';
+import { EventSignal, ForErrors, Unsubscriber } from 'easy-signal';
 
 export type APIMethod = (...args: any[]) => any;
 export type API = {[key: string]: APIMethod | API};
@@ -96,11 +96,10 @@ export default async function createServer(socket: WebSocket, version: string, a
 
     try {
       const result = await apiFunction(...d);
-      if (typeof result === 'function' && typeof result.dispatch === 'function') {
-        // result is a signal with the library easy-signal, used to stream multiple results over time. To end the pusedo
-        // stream, send an undefined result at the end. An optional error signal attached will allow for an error to end
-        // the stream.
-        const signal = result as Signal;
+      if (typeof result?.signal === 'function') {
+        // result is an object with method named signal with the library easy-signal, used to stream multiple results.
+        // Send an undefined result to end the stream and an error to end the stream with an error.
+        const { signal, abort } = result as { signal: EventSignal, abort: EventSignal };
         const unsubscribers: Unsubscriber[] = [];
         unsubscribers.push(signal((d: any) => {
           if (d === undefined) {
@@ -110,16 +109,13 @@ export default async function createServer(socket: WebSocket, version: string, a
             send({ r, s: 1, d });
           }
         }));
-        const { error, abort } = signal as any as {error: Signal, abort: Signal};
-        if (typeof error === 'function' && typeof error.dispatch === 'function') {
-          unsubscribers.push(error((err: Error) => {
-            sendError(err);
-            unsubscribe();
-          }));
-        }
+        unsubscribers.push(signal((err: Error) => {
+          sendError(err);
+          unsubscribe();
+        }, ForErrors));
         const unsubscribe = (aborted?: boolean) => {
           if (!streamingRequests.delete(r)) return false;
-          if (aborted && abort) abort.dispatch();
+          if (aborted && abort) abort();
           unsubscribers.forEach(u => u());
           return true;
         };

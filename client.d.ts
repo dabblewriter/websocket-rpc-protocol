@@ -1,4 +1,4 @@
-import { Signal } from 'easy-signal';
+import { EventSignal } from 'easy-signal/eventSignal';
 export interface Client {
     deviceId: string;
     online: boolean;
@@ -19,19 +19,18 @@ export interface ClientAPI<T = {}> {
     sendAfterAuthed<T = any>(action: string, ...args: [...any[], AbortSignal, GenericFunction]): Promise<T>;
     sendAfterAuthed<T = any>(action: string, ...args: [...any[], GenericFunction]): Promise<T>;
     sendAfterAuthed<T = any>(action: string, ...args: any[]): Promise<T>;
-    onMessage<T extends GenericFunction>(listener: T): Unsubscribe;
+    onMessage: EventSignal;
     auth(idToken?: string): Promise<string>;
     pause(pause?: boolean): void;
     getNow(): number;
     getDate(): Date;
     get(): Client;
-    subscribe(listener: (data: Client) => any): Unsubscribe;
-    onChange: Signal<(data: Client) => any>;
-    onOpen: Signal<(options: {
+    subscribe: EventSignal<(data: Client) => void>;
+    onOpen: EventSignal<(options: {
         waitUntil(promise: Promise<any>): void;
-    }) => any>;
-    onClose: Signal<() => any>;
-    onError: Signal<() => any>;
+    }) => void>;
+    onClose: EventSignal<() => void>;
+    onError: EventSignal<(error: Error) => void>;
 }
 export default function createClient<T = {}>(url: string): ClientAPI<T>;
 declare type GenericFunction = (...args: any[]) => any;
