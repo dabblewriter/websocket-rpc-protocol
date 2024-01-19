@@ -1,5 +1,6 @@
 import { createId } from 'crypto-id';
 import { eventSignal, EventSignal } from 'easy-signal/eventSignal';
+import { ReactiveSignal, reactiveSignal } from 'easy-signal/reactiveSignal';
 
 const CONNECTION_TIMEOUT = 5000;
 const BASE_RETRY_TIME = 1000;
@@ -33,37 +34,37 @@ export interface ClientAPI<T = {}> {
   getNow(): number;
   getDate(): Date;
   get(): Client;
-  subscribe: EventSignal<(data: Client) => void>;
-  onOpen: EventSignal<(options: {waitUntil(promise: Promise<any>): void}) => void>;
+  subscribe: ReactiveSignal<Client>;
+  onOpen: EventSignal<(options: { waitUntil(promise: Promise<any>): void }) => void>;
   onClose: EventSignal<() => void>;
   onError: EventSignal<(error: Error) => void>;
 }
 
 export default function createClient<T = {}>(url: string): ClientAPI<T> {
-  const requests: {[r: string]: Request} = {};
+  const requests: { [r: string]: Request } = {};
   const afterConnectedQueue: Array<Request> = [];
   const afterAuthedQueue: Array<Request> = [];
-  const deviceId = localStorage.deviceId as string || (localStorage.deviceId = createId());
-  const subscribe = eventSignal<(client: Client) => void>();
+  const data = reactiveSignal({
+    deviceId: (localStorage.deviceId as string) || (localStorage.deviceId = createId()),
+    online: window.navigator.onLine,
+    connected: false,
+    authed: false,
+    serverTimeOffset: parseInt(localStorage.timeOffset) || 0,
+    serverVersion: '',
+  } as Client);
   const onMessage = eventSignal();
-  const onOpen = eventSignal<(options: {waitUntil(promise: Promise<any>): void}) => any>();
+  const onOpen = eventSignal<(options: { waitUntil(promise: Promise<any>): void }) => any>();
   const onClose = eventSignal<() => any>();
   const onError = eventSignal<(error: Error) => any>();
 
   let socket: WebSocket;
   let shouldConnect = false;
   let requestNumber = 1;
-  let online = window.navigator.onLine;
-  let connected = false;
-  let authed = false;
-  let serverTimeOffset = parseInt(localStorage.timeOffset) || 0;
-  let serverVersion = '';
   let retries = 0;
   let reconnectTimeout: any;
   let connectionTimeout: any;
   let closing: any;
-  let paused: boolean; // use for testing data drop and sync stability/recovery
-  let data: Client = { deviceId, online, connected, authed, serverTimeOffset, serverVersion };
+  let paused: boolean; // use for testing data drop and sync stability/recovery\
 
   window.addEventListener('online', onOnline);
   window.addEventListener('offline', onOffline);
@@ -74,14 +75,12 @@ export default function createClient<T = {}>(url: string): ClientAPI<T> {
     disconnect();
   }
 
-  function update() {
-    if (online !== data.online || connected !== data.connected || authed !== data.authed || serverTimeOffset !== data.serverTimeOffset  || serverVersion !== data.serverVersion) {
-      subscribe(data = { deviceId, online, connected, authed, serverTimeOffset, serverVersion });
+  function updateData(update: Partial<Client>) {
+    const obj = data();
+    if (!Object.entries(update).some(([key, value]) => obj[key] !== value)) {
+      return; // Nothing actually changed
     }
-  }
-
-  function get() {
-    return data;
+    data(obj => ({ ...obj, ...update }));
   }
 
   function connect(): Promise<void> {
@@ -91,9 +90,9 @@ export default function createClient<T = {}>(url: string): ClientAPI<T> {
     return new Promise((resolve, reject) => {
       shouldConnect = true;
 
-      if (!online) {
+      if (!data().online) {
         return reject(new Error('offline'));
-      } else if (connected) {
+      } else if (data().connected) {
         return;
       }
 
@@ -119,10 +118,8 @@ export default function createClient<T = {}>(url: string): ClientAPI<T> {
         closing = null;
         socket.onclose = null;
         (socket as any) = null;
-        if (connected) {
-          connected = false;
-          authed = false;
-          update();
+        if (data().connected) {
+          updateData({ connected: false, authed: false });
         }
         onClose();
 
@@ -132,8 +129,8 @@ export default function createClient<T = {}>(url: string): ClientAPI<T> {
           delete requests[key];
         });
 
-        if (shouldConnect && online) {
-          const backoff = Math.round((Math.random() * (Math.pow(2, retries) - 1)) * BASE_RETRY_TIME);
+        if (shouldConnect && data().online) {
+          const backoff = Math.round(Math.random() * (Math.pow(2, retries) - 1) * BASE_RETRY_TIME);
           retries = Math.min(MAX_RETRY_BACKOFF, retries + 1);
           reconnectTimeout = setTimeout(() => {
             connect().catch(err => {});
@@ -155,17 +152,18 @@ export default function createClient<T = {}>(url: string): ClientAPI<T> {
           // Connected!
           clearTimeout(connectionTimeout);
           retries = 0;
-          connected = true;
-          localStorage.timeOffset = serverTimeOffset = data.ts - Date.now();
-          serverVersion = data.v;
+          const serverTimeOffset = (localStorage.timeOffset = data.ts - Date.now());
+          const serverVersion = data.v;
 
           const promises = [];
-          const options = { waitUntil: (promise: Promise<any>) => {
-            promises.push(promise);
-          }};
+          const options = {
+            waitUntil: (promise: Promise<any>) => {
+              promises.push(promise);
+            },
+          };
           onOpen(options);
           if (promises.length) await Promise.all(promises);
-          update();
+          updateData({ connected: true, serverTimeOffset, serverVersion });
           while (afterConnectedQueue.length) {
             const { action, args, resolve, reject } = afterConnectedQueue.shift() as Request;
             send(action, ...args).then(resolve, reject);
@@ -208,9 +206,7 @@ export default function createClient<T = {}>(url: string): ClientAPI<T> {
 
   function closeSocket() {
     if (!socket) return;
-    connected = false;
-    authed = false;
-    update();
+    updateData({ connected: false, authed: false });
     socket.close(1000);
     if (socket) (socket.onclose as any)();
   }
@@ -259,7 +255,7 @@ export default function createClient<T = {}>(url: string): ClientAPI<T> {
   }
 
   function sendAfterAuthed(action: string, ...args: any[]): Promise<any> {
-    if (authed) return send(action, ...args);
+    if (data().authed) return send(action, ...args);
 
     return new Promise((resolve, reject) => {
       afterAuthedQueue.push({ action, args, resolve, reject });
@@ -268,8 +264,7 @@ export default function createClient<T = {}>(url: string): ClientAPI<T> {
 
   async function auth(idToken?: string) {
     const uid = await send('auth', idToken);
-    authed = !!uid;
-    update();
+    updateData({ authed: !!uid });
     while (afterAuthedQueue.length) {
       const { action, args, resolve, reject } = afterAuthedQueue.shift() as Request;
       send(action, ...args).then(resolve, reject);
@@ -278,7 +273,7 @@ export default function createClient<T = {}>(url: string): ClientAPI<T> {
   }
 
   function getNow() {
-    return Date.now() + serverTimeOffset;
+    return Date.now() + data().serverTimeOffset;
   }
 
   function getDate() {
@@ -286,23 +281,22 @@ export default function createClient<T = {}>(url: string): ClientAPI<T> {
   }
 
   function onOnline() {
-    online = true;
-    update();
+    updateData({ online: true });
     if (shouldConnect) {
       connect().catch(err => {});
     }
   }
 
   function onOffline() {
-    online = false;
-    update();
+    updateData({ online: false});
     closeSocket();
   }
 
   function proxy(target: any, name?: string) {
     return new Proxy(target, {
       apply: (_, __, args) => send(name, ...args),
-      get: (obj, prop: string) => prop in obj ? obj[prop] : (obj[prop] = proxy(() => {}, name ? `${name}.${prop}` : prop)),
+      get: (obj, prop: string) =>
+        prop in obj ? obj[prop] : (obj[prop] = proxy(() => {}, name ? `${name}.${prop}` : prop)),
     });
   }
 
@@ -317,8 +311,8 @@ export default function createClient<T = {}>(url: string): ClientAPI<T> {
     auth,
     getNow,
     getDate,
-    get,
-    subscribe,
+    get: data,
+    subscribe: data,
     onMessage,
     onOpen,
     onClose,

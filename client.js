@@ -1,5 +1,6 @@
 import { createId } from 'crypto-id';
 import { eventSignal } from 'easy-signal/eventSignal';
+import { reactiveSignal } from 'easy-signal/reactiveSignal';
 const CONNECTION_TIMEOUT = 5000;
 const BASE_RETRY_TIME = 1000;
 const MAX_RETRY_BACKOFF = 4;
@@ -7,8 +8,14 @@ export default function createClient(url) {
     const requests = {};
     const afterConnectedQueue = [];
     const afterAuthedQueue = [];
-    const deviceId = localStorage.deviceId || (localStorage.deviceId = createId());
-    const subscribe = eventSignal();
+    const data = reactiveSignal({
+        deviceId: localStorage.deviceId || (localStorage.deviceId = createId()),
+        online: window.navigator.onLine,
+        connected: false,
+        authed: false,
+        serverTimeOffset: parseInt(localStorage.timeOffset) || 0,
+        serverVersion: '',
+    });
     const onMessage = eventSignal();
     const onOpen = eventSignal();
     const onClose = eventSignal();
@@ -16,17 +23,11 @@ export default function createClient(url) {
     let socket;
     let shouldConnect = false;
     let requestNumber = 1;
-    let online = window.navigator.onLine;
-    let connected = false;
-    let authed = false;
-    let serverTimeOffset = parseInt(localStorage.timeOffset) || 0;
-    let serverVersion = '';
     let retries = 0;
     let reconnectTimeout;
     let connectionTimeout;
     let closing;
-    let paused; // use for testing data drop and sync stability/recovery
-    let data = { deviceId, online, connected, authed, serverTimeOffset, serverVersion };
+    let paused; // use for testing data drop and sync stability/recovery\
     window.addEventListener('online', onOnline);
     window.addEventListener('offline', onOffline);
     function close() {
@@ -34,23 +35,22 @@ export default function createClient(url) {
         window.removeEventListener('offline', onOffline);
         disconnect();
     }
-    function update() {
-        if (online !== data.online || connected !== data.connected || authed !== data.authed || serverTimeOffset !== data.serverTimeOffset || serverVersion !== data.serverVersion) {
-            subscribe(data = { deviceId, online, connected, authed, serverTimeOffset, serverVersion });
+    function updateData(update) {
+        const obj = data();
+        if (!Object.entries(update).some(([key, value]) => obj[key] !== value)) {
+            return; // Nothing actually changed
         }
-    }
-    function get() {
-        return data;
+        data(obj => ({ ...obj, ...update }));
     }
     function connect() {
         clearTimeout(reconnectTimeout);
         clearTimeout(connectionTimeout);
         return new Promise((resolve, reject) => {
             shouldConnect = true;
-            if (!online) {
+            if (!data().online) {
                 return reject(new Error('offline'));
             }
-            else if (connected) {
+            else if (data().connected) {
                 return;
             }
             try {
@@ -74,10 +74,8 @@ export default function createClient(url) {
                 closing = null;
                 socket.onclose = null;
                 socket = null;
-                if (connected) {
-                    connected = false;
-                    authed = false;
-                    update();
+                if (data().connected) {
+                    updateData({ connected: false, authed: false });
                 }
                 onClose();
                 Object.keys(requests).forEach(key => {
@@ -85,8 +83,8 @@ export default function createClient(url) {
                     request.reject(new Error('CONNECTION_CLOSED'));
                     delete requests[key];
                 });
-                if (shouldConnect && online) {
-                    const backoff = Math.round((Math.random() * (Math.pow(2, retries) - 1)) * BASE_RETRY_TIME);
+                if (shouldConnect && data().online) {
+                    const backoff = Math.round(Math.random() * (Math.pow(2, retries) - 1) * BASE_RETRY_TIME);
                     retries = Math.min(MAX_RETRY_BACKOFF, retries + 1);
                     reconnectTimeout = setTimeout(() => {
                         connect().catch(err => { });
@@ -108,17 +106,18 @@ export default function createClient(url) {
                     // Connected!
                     clearTimeout(connectionTimeout);
                     retries = 0;
-                    connected = true;
-                    localStorage.timeOffset = serverTimeOffset = data.ts - Date.now();
-                    serverVersion = data.v;
+                    const serverTimeOffset = (localStorage.timeOffset = data.ts - Date.now());
+                    const serverVersion = data.v;
                     const promises = [];
-                    const options = { waitUntil: (promise) => {
+                    const options = {
+                        waitUntil: (promise) => {
                             promises.push(promise);
-                        } };
+                        },
+                    };
                     onOpen(options);
                     if (promises.length)
                         await Promise.all(promises);
-                    update();
+                    updateData({ connected: true, serverTimeOffset, serverVersion });
                     while (afterConnectedQueue.length) {
                         const { action, args, resolve, reject } = afterConnectedQueue.shift();
                         send(action, ...args).then(resolve, reject);
@@ -161,9 +160,7 @@ export default function createClient(url) {
     function closeSocket() {
         if (!socket)
             return;
-        connected = false;
-        authed = false;
-        update();
+        updateData({ connected: false, authed: false });
         socket.close(1000);
         if (socket)
             socket.onclose();
@@ -213,7 +210,7 @@ export default function createClient(url) {
         });
     }
     function sendAfterAuthed(action, ...args) {
-        if (authed)
+        if (data().authed)
             return send(action, ...args);
         return new Promise((resolve, reject) => {
             afterAuthedQueue.push({ action, args, resolve, reject });
@@ -221,8 +218,7 @@ export default function createClient(url) {
     }
     async function auth(idToken) {
         const uid = await send('auth', idToken);
-        authed = !!uid;
-        update();
+        updateData({ authed: !!uid });
         while (afterAuthedQueue.length) {
             const { action, args, resolve, reject } = afterAuthedQueue.shift();
             send(action, ...args).then(resolve, reject);
@@ -230,21 +226,19 @@ export default function createClient(url) {
         return uid;
     }
     function getNow() {
-        return Date.now() + serverTimeOffset;
+        return Date.now() + data().serverTimeOffset;
     }
     function getDate() {
         return new Date(getNow());
     }
     function onOnline() {
-        online = true;
-        update();
+        updateData({ online: true });
         if (shouldConnect) {
             connect().catch(err => { });
         }
     }
     function onOffline() {
-        online = false;
-        update();
+        updateData({ online: false });
         closeSocket();
     }
     function proxy(target, name) {
@@ -264,8 +258,8 @@ export default function createClient(url) {
         auth,
         getNow,
         getDate,
-        get,
-        subscribe,
+        get: data,
+        subscribe: data,
         onMessage,
         onOpen,
         onClose,

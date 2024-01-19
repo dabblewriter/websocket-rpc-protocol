@@ -1,4 +1,5 @@
 import { EventSignal } from 'easy-signal/eventSignal';
+import { ReactiveSignal } from 'easy-signal/reactiveSignal';
 export interface Client {
     deviceId: string;
     online: boolean;
@@ -25,7 +26,7 @@ export interface ClientAPI<T = {}> {
     getNow(): number;
     getDate(): Date;
     get(): Client;
-    subscribe: EventSignal<(data: Client) => void>;
+    subscribe: ReactiveSignal<Client>;
     onOpen: EventSignal<(options: {
         waitUntil(promise: Promise<any>): void;
     }) => void>;
