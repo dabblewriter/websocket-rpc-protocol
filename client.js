@@ -1,6 +1,6 @@
 import { createId } from 'crypto-id';
 import { eventSignal } from 'easy-signal/eventSignal';
-import { reactiveSignal } from 'easy-signal/reactiveSignal';
+import { reactiveSignal, subscribe as signalSubscribe } from 'easy-signal/reactiveSignal';
 const CONNECTION_TIMEOUT = 5000;
 const BASE_RETRY_TIME = 1000;
 const MAX_RETRY_BACKOFF = 4;
@@ -259,7 +259,7 @@ export default function createClient(url) {
         getNow,
         getDate,
         get: data,
-        subscribe: data,
+        subscribe: signalSubscribe.bind(null, data),
         onMessage,
         onOpen,
         onClose,
