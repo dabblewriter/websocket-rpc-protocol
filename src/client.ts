@@ -1,5 +1,5 @@
 import { createId } from 'crypto-id';
-import { signal, Signal } from 'easy-signal';
+import { eventSignal, EventSignal } from 'easy-signal/eventSignal';
 
 const CONNECTION_TIMEOUT = 5000;
 const BASE_RETRY_TIME = 1000;
@@ -27,29 +27,28 @@ export interface ClientAPI<T = {}> {
   sendAfterAuthed<T = any>(action: string, ...args: [...any[], AbortSignal, GenericFunction]): Promise<T>;
   sendAfterAuthed<T = any>(action: string, ...args: [...any[], GenericFunction]): Promise<T>;
   sendAfterAuthed<T = any>(action: string, ...args: any[]): Promise<T>;
-  onMessage<T extends GenericFunction>(listener: T): Unsubscribe;
+  onMessage: EventSignal;
   auth(idToken?: string): Promise<string>;
   pause(pause?: boolean): void;
   getNow(): number;
   getDate(): Date;
   get(): Client;
-  subscribe(listener: (data: Client) => any): Unsubscribe;
-  onChange: Signal<(data: Client) => any>;
-  onOpen: Signal<(options: {waitUntil(promise: Promise<any>): void}) => any>;
-  onClose: Signal<() => any>;
-  onError: Signal<() => any>;
+  subscribe: EventSignal<(data: Client) => void>;
+  onOpen: EventSignal<(options: {waitUntil(promise: Promise<any>): void}) => void>;
+  onClose: EventSignal<() => void>;
+  onError: EventSignal<(error: Error) => void>;
 }
 
 export default function createClient<T = {}>(url: string): ClientAPI<T> {
   const requests: {[r: string]: Request} = {};
   const afterConnectedQueue: Array<Request> = [];
   const afterAuthedQueue: Array<Request> = [];
-  const onChange = signal<(client: Client) => any>();
   const deviceId = localStorage.deviceId as string || (localStorage.deviceId = createId());
-  const listeners: {[r: number]: Signal} = {1: signal()};
-  const onOpen = signal<(options: {waitUntil(promise: Promise<any>): void}) => any>();
-  const onClose = signal<() => any>();
-  const onError = signal<(error: Error) => any>();
+  const subscribe = eventSignal<(client: Client) => void>();
+  const onMessage = eventSignal();
+  const onOpen = eventSignal<(options: {waitUntil(promise: Promise<any>): void}) => any>();
+  const onClose = eventSignal<() => any>();
+  const onError = eventSignal<(error: Error) => any>();
 
   let socket: WebSocket;
   let shouldConnect = false;
@@ -77,14 +76,8 @@ export default function createClient<T = {}>(url: string): ClientAPI<T> {
 
   function update() {
     if (online !== data.online || connected !== data.connected || authed !== data.authed || serverTimeOffset !== data.serverTimeOffset  || serverVersion !== data.serverVersion) {
-      onChange.dispatch(data = { deviceId, online, connected, authed, serverTimeOffset, serverVersion });
+      subscribe(data = { deviceId, online, connected, authed, serverTimeOffset, serverVersion });
     }
-  }
-
-  function subscribe(listener: (client: Client) => any) {
-    const unsub = onChange(listener);
-    listener(data);
-    return unsub;
   }
 
   function get() {
@@ -116,7 +109,7 @@ export default function createClient<T = {}>(url: string): ClientAPI<T> {
       }
 
       socket.onerror = (event: ErrorEvent) => {
-        onError.dispatch(event.error);
+        onError(event.error);
         reject();
         closeSocket();
       };
@@ -131,7 +124,7 @@ export default function createClient<T = {}>(url: string): ClientAPI<T> {
           authed = false;
           update();
         }
-        onClose.dispatch();
+        onClose();
 
         Object.keys(requests).forEach(key => {
           const request = requests[key];
@@ -170,7 +163,7 @@ export default function createClient<T = {}>(url: string): ClientAPI<T> {
           const options = { waitUntil: (promise: Promise<any>) => {
             promises.push(promise);
           }};
-          onOpen.dispatch(options);
+          onOpen(options);
           if (promises.length) await Promise.all(promises);
           update();
           while (afterConnectedQueue.length) {
@@ -182,7 +175,7 @@ export default function createClient<T = {}>(url: string): ClientAPI<T> {
         }
 
         if (data.p) {
-          listeners[data.p]?.dispatch(data.d);
+          onMessage(data.d);
           return;
         }
 
@@ -220,10 +213,6 @@ export default function createClient<T = {}>(url: string): ClientAPI<T> {
     update();
     socket.close(1000);
     if (socket) (socket.onclose as any)();
-  }
-
-  function onMessage<T extends GenericFunction>(listener: T) {
-    return listeners[1](listener);
   }
 
   function send<T = any>(action: string, ...args: any[]): Promise<T>;
@@ -325,13 +314,12 @@ export default function createClient<T = {}>(url: string): ClientAPI<T> {
     pause,
     send,
     sendAfterAuthed,
-    onMessage,
     auth,
     getNow,
     getDate,
     get,
     subscribe,
-    onChange,
+    onMessage,
     onOpen,
     onClose,
     onError,
