@@ -4,16 +4,16 @@ import { reactiveSignal, subscribe as signalSubscribe } from 'easy-signal/reacti
 const CONNECTION_TIMEOUT = 5000;
 const BASE_RETRY_TIME = 1000;
 const MAX_RETRY_BACKOFF = 4;
-export default function createClient(url) {
+export default function createClient(url, deviceId = createId(), serverTimeOffset = 0) {
     const requests = {};
     const afterConnectedQueue = [];
     const afterAuthedQueue = [];
     const data = reactiveSignal({
-        deviceId: localStorage.deviceId || (localStorage.deviceId = createId()),
+        deviceId,
         online: window.navigator.onLine,
         connected: false,
         authed: false,
-        serverTimeOffset: parseInt(localStorage.timeOffset) || 0,
+        serverTimeOffset,
         serverVersion: '',
     });
     const onMessage = eventSignal();
@@ -106,7 +106,7 @@ export default function createClient(url) {
                     // Connected!
                     clearTimeout(connectionTimeout);
                     retries = 0;
-                    const serverTimeOffset = (localStorage.timeOffset = data.ts - Date.now());
+                    const serverTimeOffset = data.ts - Date.now();
                     const serverVersion = data.v;
                     const promises = [];
                     const options = {

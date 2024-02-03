@@ -40,16 +40,16 @@ export interface ClientAPI<T = {}> {
   onError: EventSignal<(error: Error) => void>;
 }
 
-export default function createClient<T = {}>(url: string): ClientAPI<T> {
+export default function createClient<T = {}>(url: string, deviceId: string = createId(), serverTimeOffset = 0): ClientAPI<T> {
   const requests: { [r: string]: Request } = {};
   const afterConnectedQueue: Array<Request> = [];
   const afterAuthedQueue: Array<Request> = [];
   const data = reactiveSignal({
-    deviceId: (localStorage.deviceId as string) || (localStorage.deviceId = createId()),
+    deviceId,
     online: window.navigator.onLine,
     connected: false,
     authed: false,
-    serverTimeOffset: parseInt(localStorage.timeOffset) || 0,
+    serverTimeOffset,
     serverVersion: '',
   } as Client);
   const onMessage = eventSignal();
@@ -152,7 +152,7 @@ export default function createClient<T = {}>(url: string): ClientAPI<T> {
           // Connected!
           clearTimeout(connectionTimeout);
           retries = 0;
-          const serverTimeOffset = (localStorage.timeOffset = data.ts - Date.now());
+          const serverTimeOffset = data.ts - Date.now();
           const serverVersion = data.v;
 
           const promises = [];

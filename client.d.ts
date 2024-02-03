@@ -32,6 +32,6 @@ export interface ClientAPI<T = {}> {
     onClose: EventSignal<() => void>;
     onError: EventSignal<(error: Error) => void>;
 }
-export default function createClient<T = {}>(url: string): ClientAPI<T>;
+export default function createClient<T = {}>(url: string, deviceId?: string, serverTimeOffset?: number): ClientAPI<T>;
 declare type GenericFunction = (...args: any[]) => any;
 export {};
