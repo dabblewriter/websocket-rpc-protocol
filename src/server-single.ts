@@ -1,4 +1,4 @@
-import { EventSignal, ForErrors, Unsubscriber } from 'easy-signal/eventSignal';
+import { EventSignal, ForErrors, Unsubscriber } from 'easy-signal';
 
 export type APIMethod = (ws: WebSocket, ...args: any[]) => any;
 export interface API {

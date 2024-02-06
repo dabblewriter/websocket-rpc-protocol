@@ -1,4 +1,4 @@
-import { EventSignal } from 'easy-signal/eventSignal';
+import { EventSignal } from 'easy-signal';
 export interface Client {
     deviceId: string;
     online: boolean;

@@ -1,16 +1,15 @@
 import { createId } from 'crypto-id';
-import { eventSignal } from 'easy-signal/eventSignal';
-import { reactiveSignal, subscribe as signalSubscribe } from 'easy-signal/reactiveSignal';
+import { eventSignal, reactiveSignal, subscribe as signalSubscribe } from 'easy-signal';
 const CONNECTION_TIMEOUT = 5000;
 const BASE_RETRY_TIME = 1000;
 const MAX_RETRY_BACKOFF = 4;
 export default function createClient(url, deviceId = createId(), serverTimeOffset = 0) {
-    const requests = {};
+    const requests = new Map();
     const afterConnectedQueue = [];
     const afterAuthedQueue = [];
     const data = reactiveSignal({
         deviceId,
-        online: window.navigator.onLine,
+        online: globalThis.navigator?.onLine,
         connected: false,
         authed: false,
         serverTimeOffset,
@@ -28,11 +27,11 @@ export default function createClient(url, deviceId = createId(), serverTimeOffse
     let connectionTimeout;
     let closing;
     let paused; // use for testing data drop and sync stability/recovery\
-    window.addEventListener('online', onOnline);
-    window.addEventListener('offline', onOffline);
+    globalThis.addEventListener('online', onOnline);
+    globalThis.addEventListener('offline', onOffline);
     function close() {
-        window.removeEventListener('online', onOnline);
-        window.removeEventListener('offline', onOffline);
+        globalThis.removeEventListener('online', onOnline);
+        globalThis.removeEventListener('offline', onOffline);
         disconnect();
     }
     function updateData(update) {
@@ -78,10 +77,9 @@ export default function createClient(url, deviceId = createId(), serverTimeOffse
                     updateData({ connected: false, authed: false });
                 }
                 onClose();
-                Object.keys(requests).forEach(key => {
-                    const request = requests[key];
+                requests.forEach((request, key) => {
                     request.reject(new Error('CONNECTION_CLOSED'));
-                    delete requests[key];
+                    requests.delete(key);
                 });
                 if (shouldConnect && data().online) {
                     const backoff = Math.round(Math.random() * (Math.pow(2, retries) - 1) * BASE_RETRY_TIME);
@@ -129,7 +127,7 @@ export default function createClient(url, deviceId = createId(), serverTimeOffse
                     onMessage(data.d);
                     return;
                 }
-                const request = requests[data.r];
+                const request = requests.get(data.r);
                 if (!request)
                     return; // for now
                 if (data.err) {
@@ -195,7 +193,7 @@ export default function createClient(url, deviceId = createId(), serverTimeOffse
                     };
                 }
             }
-            requests[r] = { action, args, resolve, reject, onMessage };
+            requests.set(r, { action, args, resolve, reject, onMessage });
             try {
                 socket.send(JSON.stringify({ r, a: action, d: args.length ? args : undefined }));
             }
@@ -203,8 +201,8 @@ export default function createClient(url, deviceId = createId(), serverTimeOffse
                 console.error('Exception thrown from WebSocket.send():', err.message, 'Closing connection.');
             }
         }).finally(() => {
-            delete requests[r];
-            if (closing && !Object.keys(requests).length && socket) {
+            requests.delete(r);
+            if (closing && !requests.size && socket) {
                 closeSocket();
             }
         });

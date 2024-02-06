@@ -1,4 +1,4 @@
-import { ForErrors } from 'easy-signal/eventSignal';
+import { ForErrors } from 'easy-signal';
 ;
 // Exposes an API to a websocket endpoint using the protocol described in PROTOCOL.md
 // use server-single if one server can handle multiple clients without state, otherwise use server

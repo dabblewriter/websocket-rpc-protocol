@@ -1,6 +1,5 @@
 import { createId } from 'crypto-id';
-import { eventSignal, EventSignal } from 'easy-signal/eventSignal';
-import { reactiveSignal, subscribe as signalSubscribe } from 'easy-signal/reactiveSignal';
+import { eventSignal, EventSignal, reactiveSignal, subscribe as signalSubscribe } from 'easy-signal';
 
 const CONNECTION_TIMEOUT = 5000;
 const BASE_RETRY_TIME = 1000;
@@ -41,12 +40,12 @@ export interface ClientAPI<T = {}> {
 }
 
 export default function createClient<T = {}>(url: string, deviceId: string = createId(), serverTimeOffset = 0): ClientAPI<T> {
-  const requests: { [r: string]: Request } = {};
+  const requests = new Map<number, Request>();
   const afterConnectedQueue: Array<Request> = [];
   const afterAuthedQueue: Array<Request> = [];
   const data = reactiveSignal({
     deviceId,
-    online: window.navigator.onLine,
+    online: globalThis.navigator?.onLine,
     connected: false,
     authed: false,
     serverTimeOffset,
@@ -66,12 +65,12 @@ export default function createClient<T = {}>(url: string, deviceId: string = cre
   let closing: any;
   let paused: boolean; // use for testing data drop and sync stability/recovery\
 
-  window.addEventListener('online', onOnline);
-  window.addEventListener('offline', onOffline);
+  globalThis.addEventListener('online', onOnline);
+  globalThis.addEventListener('offline', onOffline);
 
   function close() {
-    window.removeEventListener('online', onOnline);
-    window.removeEventListener('offline', onOffline);
+    globalThis.removeEventListener('online', onOnline);
+    globalThis.removeEventListener('offline', onOffline);
     disconnect();
   }
 
@@ -123,10 +122,9 @@ export default function createClient<T = {}>(url: string, deviceId: string = cre
         }
         onClose();
 
-        Object.keys(requests).forEach(key => {
-          const request = requests[key];
+        requests.forEach((request, key) => {
           request.reject(new Error('CONNECTION_CLOSED'));
-          delete requests[key];
+          requests.delete(key);
         });
 
         if (shouldConnect && data().online) {
@@ -177,7 +175,7 @@ export default function createClient<T = {}>(url: string, deviceId: string = cre
           return;
         }
 
-        const request = requests[data.r];
+        const request = requests.get(data.r);
         if (!request) return; // for now
         if (data.err) {
           console.log('Error with send', request.action, request.args);
@@ -239,16 +237,16 @@ export default function createClient<T = {}>(url: string, deviceId: string = cre
           };
         }
       }
-      requests[r] = { action, args, resolve, reject, onMessage };
+      requests.set(r, { action, args, resolve, reject, onMessage });
       try {
         socket.send(JSON.stringify({ r, a: action, d: args.length ? args : undefined }));
       } catch (err) {
         console.error('Exception thrown from WebSocket.send():', err.message, 'Closing connection.');
       }
     }).finally(() => {
-      delete requests[r];
+      requests.delete(r);
 
-      if (closing && !Object.keys(requests).length && socket) {
+      if (closing && !requests.size && socket) {
         closeSocket();
       }
     });
