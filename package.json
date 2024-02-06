@@ -1,6 +1,6 @@
 {
   "name": "websocket-rpc-protocol",
-  "version": "0.3.0",
+  "version": "0.3.2",
   "description": "A JSON RPC protocol for working over websockets. Sheds the weight of JSON RPC to simplify argument names and adds features.",
   "scripts": {
     "build": "tsc",
@@ -29,6 +29,6 @@
   },
   "dependencies": {
     "crypto-id": "^0.1.0",
-    "easy-signal": "^3.0.0"
+    "easy-signal": "^3.0.4"
   }
 }
