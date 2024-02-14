@@ -20,6 +20,7 @@ export interface ClientAPI<T = {}> {
   connect(): Promise<void>;
   disconnect(): void;
   close(): void;
+  ping(): Promise<void>;
   api: T;
   send<T = any>(action: string, ...args: [...any[], AbortSignal, GenericFunction]): Promise<T>;
   send<T = any>(action: string, ...args: [...any[], GenericFunction]): Promise<T>;
@@ -64,6 +65,7 @@ export default function createClient<T = {}>(url: string, deviceId: string = cre
   let connectionTimeout: any;
   let closing: any;
   let paused: boolean; // use for testing data drop and sync stability/recovery\
+  let pingDeferred: Deferred = undefined;
 
   globalThis.addEventListener('online', onOnline);
   globalThis.addEventListener('offline', onOffline);
@@ -137,7 +139,14 @@ export default function createClient<T = {}>(url: string, deviceId: string = cre
       };
 
       socket.onmessage = async event => {
+        if (event.data === 'pong') {
+          pingDeferred?.resolve();
+          pingDeferred = undefined;
+          return;
+        }
+
         if (paused) return;
+
         let data: any;
         try {
           data = JSON.parse(event.data);
@@ -207,6 +216,14 @@ export default function createClient<T = {}>(url: string, deviceId: string = cre
     updateData({ connected: false, authed: false });
     socket.close(1000);
     if (socket) (socket.onclose as any)();
+  }
+
+  function ping() {
+    if (pingDeferred) pingDeferred.reject();
+    return new Promise<void>((resolve, reject) => {
+      pingDeferred = { resolve, reject };
+      socket.send('ping');
+    });
   }
 
   function send<T = any>(action: string, ...args: any[]): Promise<T>;
@@ -303,6 +320,7 @@ export default function createClient<T = {}>(url: string, deviceId: string = cre
     connect,
     disconnect,
     close,
+    ping,
     pause,
     send,
     sendAfterAuthed,
@@ -320,10 +338,13 @@ export default function createClient<T = {}>(url: string, deviceId: string = cre
 
 type GenericFunction = (...args: any[]) => any;
 
-interface Request {
-  action: string;
-  args: any[];
+interface Deferred {
   resolve(value?: unknown): void;
   reject(reason?: any): void;
+}
+
+interface Request extends Deferred {
+  action: string;
+  args: any[];
   onMessage?: GenericFunction;
 }

@@ -12,6 +12,7 @@ export interface ClientAPI<T = {}> {
     connect(): Promise<void>;
     disconnect(): void;
     close(): void;
+    ping(): Promise<void>;
     api: T;
     send<T = any>(action: string, ...args: [...any[], AbortSignal, GenericFunction]): Promise<T>;
     send<T = any>(action: string, ...args: [...any[], GenericFunction]): Promise<T>;

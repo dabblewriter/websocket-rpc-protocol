@@ -27,6 +27,7 @@ export default function createClient(url, deviceId = createId(), serverTimeOffse
     let connectionTimeout;
     let closing;
     let paused; // use for testing data drop and sync stability/recovery\
+    let pingDeferred = undefined;
     globalThis.addEventListener('online', onOnline);
     globalThis.addEventListener('offline', onOffline);
     function close() {
@@ -90,6 +91,11 @@ export default function createClient(url, deviceId = createId(), serverTimeOffse
                 }
             };
             socket.onmessage = async (event) => {
+                if (event.data === 'pong') {
+                    pingDeferred?.resolve();
+                    pingDeferred = undefined;
+                    return;
+                }
                 if (paused)
                     return;
                 let data;
@@ -162,6 +168,14 @@ export default function createClient(url, deviceId = createId(), serverTimeOffse
         socket.close(1000);
         if (socket)
             socket.onclose();
+    }
+    function ping() {
+        if (pingDeferred)
+            pingDeferred.reject();
+        return new Promise((resolve, reject) => {
+            pingDeferred = { resolve, reject };
+            socket.send('ping');
+        });
     }
     async function send(action, ...args) {
         if (!socket || socket.readyState > 1 || closing) {
@@ -250,6 +264,7 @@ export default function createClient(url, deviceId = createId(), serverTimeOffse
         connect,
         disconnect,
         close,
+        ping,
         pause,
         send,
         sendAfterAuthed,
