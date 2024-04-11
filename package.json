@@ -29,6 +29,6 @@
   },
   "dependencies": {
     "crypto-id": "^0.1.0",
-    "easy-signal": "^3.0.5"
+    "easy-signal": "^4.0.0"
   }
 }

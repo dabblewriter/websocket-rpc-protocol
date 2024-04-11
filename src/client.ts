@@ -1,5 +1,5 @@
 import { createId } from 'crypto-id';
-import { eventSignal, EventSignal, reactiveSignal, subscribe as signalSubscribe } from 'easy-signal';
+import { Atom, atom, signal, Signal } from 'easy-signal';
 
 const CONNECTION_TIMEOUT = 5000;
 const BASE_RETRY_TIME = 1000;
@@ -22,29 +22,28 @@ export interface ClientAPI<T = {}> {
   close(): void;
   ping(): Promise<void>;
   api: T;
+  state: Atom<Client>;
   send<T = any>(action: string, ...args: [...any[], AbortSignal, GenericFunction]): Promise<T>;
   send<T = any>(action: string, ...args: [...any[], GenericFunction]): Promise<T>;
   send<T = any>(action: string, ...args: any[]): Promise<T>;
   sendAfterAuthed<T = any>(action: string, ...args: [...any[], AbortSignal, GenericFunction]): Promise<T>;
   sendAfterAuthed<T = any>(action: string, ...args: [...any[], GenericFunction]): Promise<T>;
   sendAfterAuthed<T = any>(action: string, ...args: any[]): Promise<T>;
-  onMessage: EventSignal;
+  onMessage: Signal;
   auth(idToken?: string): Promise<string>;
   pause(pause?: boolean): void;
   getNow(): number;
   getDate(): Date;
-  get(): Client;
-  subscribe(subscriber: (data: Client) => void): Unsubscribe;
-  onOpen: EventSignal<(options: { waitUntil(promise: Promise<any>): void }) => void>;
-  onClose: EventSignal<() => void>;
-  onError: EventSignal<(error: Error) => void>;
+  onOpen: Signal<(options: { waitUntil(promise: Promise<any>): void }) => void>;
+  onClose: Signal<() => void>;
+  onError: Signal<(error: Error) => void>;
 }
 
 export default function createClient<T = {}>(url: string, deviceId: string = createId(), serverTimeOffset = 0): ClientAPI<T> {
   const requests = new Map<number, Request>();
   const afterConnectedQueue: Array<Request> = [];
   const afterAuthedQueue: Array<Request> = [];
-  const data = reactiveSignal({
+  const state = atom({
     deviceId,
     online: globalThis.navigator?.onLine,
     connected: false,
@@ -52,10 +51,10 @@ export default function createClient<T = {}>(url: string, deviceId: string = cre
     serverTimeOffset,
     serverVersion: '',
   } as Client);
-  const onMessage = eventSignal();
-  const onOpen = eventSignal<(options: { waitUntil(promise: Promise<any>): void }) => any>();
-  const onClose = eventSignal<() => any>();
-  const onError = eventSignal<(error: Error) => any>();
+  const onMessage = signal();
+  const onOpen = signal<(options: { waitUntil(promise: Promise<any>): void }) => any>();
+  const onClose = signal<() => any>();
+  const onError = signal<(error: Error) => any>();
 
   let socket: WebSocket;
   let shouldConnect = false;
@@ -77,11 +76,11 @@ export default function createClient<T = {}>(url: string, deviceId: string = cre
   }
 
   function updateData(update: Partial<Client>) {
-    const obj = data();
+    const obj = state();
     if (!Object.entries(update).some(([key, value]) => obj[key] !== value)) {
       return; // Nothing actually changed
     }
-    data(obj => ({ ...obj, ...update }));
+    state(({ ...obj, ...update }));
   }
 
   function connect(): Promise<void> {
@@ -91,9 +90,9 @@ export default function createClient<T = {}>(url: string, deviceId: string = cre
     return new Promise((resolve, reject) => {
       shouldConnect = true;
 
-      if (!data().online) {
+      if (!state().online) {
         return reject(new Error('offline'));
-      } else if (data().connected) {
+      } else if (state().connected) {
         return;
       }
 
@@ -119,7 +118,7 @@ export default function createClient<T = {}>(url: string, deviceId: string = cre
         closing = null;
         socket.onclose = null;
         (socket as any) = null;
-        if (data().connected) {
+        if (state().connected) {
           updateData({ connected: false, authed: false });
         }
         onClose();
@@ -129,7 +128,7 @@ export default function createClient<T = {}>(url: string, deviceId: string = cre
           requests.delete(key);
         });
 
-        if (shouldConnect && data().online) {
+        if (shouldConnect && state().online) {
           const backoff = Math.round(Math.random() * (Math.pow(2, retries) - 1) * BASE_RETRY_TIME);
           retries = Math.min(MAX_RETRY_BACKOFF, retries + 1);
           reconnectTimeout = setTimeout(() => {
@@ -270,7 +269,7 @@ export default function createClient<T = {}>(url: string, deviceId: string = cre
   }
 
   function sendAfterAuthed(action: string, ...args: any[]): Promise<any> {
-    if (data().authed) return send(action, ...args);
+    if (state().authed) return send(action, ...args);
 
     return new Promise((resolve, reject) => {
       afterAuthedQueue.push({ action, args, resolve, reject });
@@ -288,7 +287,7 @@ export default function createClient<T = {}>(url: string, deviceId: string = cre
   }
 
   function getNow() {
-    return Date.now() + data().serverTimeOffset;
+    return Date.now() + state().serverTimeOffset;
   }
 
   function getDate() {
@@ -317,6 +316,7 @@ export default function createClient<T = {}>(url: string, deviceId: string = cre
 
   return {
     api: proxy({}),
+    state,
     connect,
     disconnect,
     close,
@@ -327,8 +327,6 @@ export default function createClient<T = {}>(url: string, deviceId: string = cre
     auth,
     getNow,
     getDate,
-    get: data,
-    subscribe: signalSubscribe.bind(null, data),
     onMessage,
     onOpen,
     onClose,

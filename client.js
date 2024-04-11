@@ -1,5 +1,5 @@
 import { createId } from 'crypto-id';
-import { eventSignal, reactiveSignal, subscribe as signalSubscribe } from 'easy-signal';
+import { atom, signal } from 'easy-signal';
 const CONNECTION_TIMEOUT = 5000;
 const BASE_RETRY_TIME = 1000;
 const MAX_RETRY_BACKOFF = 4;
@@ -7,7 +7,7 @@ export default function createClient(url, deviceId = createId(), serverTimeOffse
     const requests = new Map();
     const afterConnectedQueue = [];
     const afterAuthedQueue = [];
-    const data = reactiveSignal({
+    const state = atom({
         deviceId,
         online: globalThis.navigator?.onLine,
         connected: false,
@@ -15,10 +15,10 @@ export default function createClient(url, deviceId = createId(), serverTimeOffse
         serverTimeOffset,
         serverVersion: '',
     });
-    const onMessage = eventSignal();
-    const onOpen = eventSignal();
-    const onClose = eventSignal();
-    const onError = eventSignal();
+    const onMessage = signal();
+    const onOpen = signal();
+    const onClose = signal();
+    const onError = signal();
     let socket;
     let shouldConnect = false;
     let requestNumber = 1;
@@ -36,21 +36,21 @@ export default function createClient(url, deviceId = createId(), serverTimeOffse
         disconnect();
     }
     function updateData(update) {
-        const obj = data();
+        const obj = state();
         if (!Object.entries(update).some(([key, value]) => obj[key] !== value)) {
             return; // Nothing actually changed
         }
-        data(obj => ({ ...obj, ...update }));
+        state(({ ...obj, ...update }));
     }
     function connect() {
         clearTimeout(reconnectTimeout);
         clearTimeout(connectionTimeout);
         return new Promise((resolve, reject) => {
             shouldConnect = true;
-            if (!data().online) {
+            if (!state().online) {
                 return reject(new Error('offline'));
             }
-            else if (data().connected) {
+            else if (state().connected) {
                 return;
             }
             try {
@@ -74,7 +74,7 @@ export default function createClient(url, deviceId = createId(), serverTimeOffse
                 closing = null;
                 socket.onclose = null;
                 socket = null;
-                if (data().connected) {
+                if (state().connected) {
                     updateData({ connected: false, authed: false });
                 }
                 onClose();
@@ -82,7 +82,7 @@ export default function createClient(url, deviceId = createId(), serverTimeOffse
                     request.reject(new Error('CONNECTION_CLOSED'));
                     requests.delete(key);
                 });
-                if (shouldConnect && data().online) {
+                if (shouldConnect && state().online) {
                     const backoff = Math.round(Math.random() * (Math.pow(2, retries) - 1) * BASE_RETRY_TIME);
                     retries = Math.min(MAX_RETRY_BACKOFF, retries + 1);
                     reconnectTimeout = setTimeout(() => {
@@ -222,7 +222,7 @@ export default function createClient(url, deviceId = createId(), serverTimeOffse
         });
     }
     function sendAfterAuthed(action, ...args) {
-        if (data().authed)
+        if (state().authed)
             return send(action, ...args);
         return new Promise((resolve, reject) => {
             afterAuthedQueue.push({ action, args, resolve, reject });
@@ -238,7 +238,7 @@ export default function createClient(url, deviceId = createId(), serverTimeOffse
         return uid;
     }
     function getNow() {
-        return Date.now() + data().serverTimeOffset;
+        return Date.now() + state().serverTimeOffset;
     }
     function getDate() {
         return new Date(getNow());
@@ -261,6 +261,7 @@ export default function createClient(url, deviceId = createId(), serverTimeOffse
     }
     return {
         api: proxy({}),
+        state,
         connect,
         disconnect,
         close,
@@ -271,8 +272,6 @@ export default function createClient(url, deviceId = createId(), serverTimeOffse
         auth,
         getNow,
         getDate,
-        get: data,
-        subscribe: signalSubscribe.bind(null, data),
         onMessage,
         onOpen,
         onClose,

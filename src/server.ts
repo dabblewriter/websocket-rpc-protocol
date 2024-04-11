@@ -1,4 +1,4 @@
-import { EventSignal, ForErrors, Unsubscriber } from 'easy-signal';
+import { ForErrors, Signal, Unsubscriber } from 'easy-signal';
 
 export type APIMethod = (...args: any[]) => any;
 export type API = {[key: string]: APIMethod | API};
@@ -99,7 +99,7 @@ export default async function createServer(socket: WebSocket, version: string, a
       if (typeof result?.signal === 'function') {
         // result is an object with method named signal with the library easy-signal, used to stream multiple results.
         // Send an undefined result to end the stream and an error to end the stream with an error.
-        const { signal, abort } = result as { signal: EventSignal, abort: EventSignal };
+        const { signal, abort } = result as { signal: Signal, abort: Signal };
         const unsubscribers: Unsubscriber[] = [];
         unsubscribers.push(signal((d: any) => {
           if (d === undefined) {

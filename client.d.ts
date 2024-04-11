@@ -1,4 +1,4 @@
-import { EventSignal } from 'easy-signal';
+import { Atom, Signal } from 'easy-signal';
 export interface Client {
     deviceId: string;
     online: boolean;
@@ -14,24 +14,23 @@ export interface ClientAPI<T = {}> {
     close(): void;
     ping(): Promise<void>;
     api: T;
+    state: Atom<Client>;
     send<T = any>(action: string, ...args: [...any[], AbortSignal, GenericFunction]): Promise<T>;
     send<T = any>(action: string, ...args: [...any[], GenericFunction]): Promise<T>;
     send<T = any>(action: string, ...args: any[]): Promise<T>;
     sendAfterAuthed<T = any>(action: string, ...args: [...any[], AbortSignal, GenericFunction]): Promise<T>;
     sendAfterAuthed<T = any>(action: string, ...args: [...any[], GenericFunction]): Promise<T>;
     sendAfterAuthed<T = any>(action: string, ...args: any[]): Promise<T>;
-    onMessage: EventSignal;
+    onMessage: Signal;
     auth(idToken?: string): Promise<string>;
     pause(pause?: boolean): void;
     getNow(): number;
     getDate(): Date;
-    get(): Client;
-    subscribe(subscriber: (data: Client) => void): Unsubscribe;
-    onOpen: EventSignal<(options: {
+    onOpen: Signal<(options: {
         waitUntil(promise: Promise<any>): void;
     }) => void>;
-    onClose: EventSignal<() => void>;
-    onError: EventSignal<(error: Error) => void>;
+    onClose: Signal<() => void>;
+    onError: Signal<(error: Error) => void>;
 }
 export default function createClient<T = {}>(url: string, deviceId?: string, serverTimeOffset?: number): ClientAPI<T>;
 declare type GenericFunction = (...args: any[]) => any;
