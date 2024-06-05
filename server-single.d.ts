@@ -1,4 +1,4 @@
-export declare type APIMethod = (ws: WebSocket, ...args: any[]) => any;
+export type APIMethod = (ws: WebSocket, ...args: any[]) => any;
 export interface API {
     [key: string]: APIMethod | API;
 }

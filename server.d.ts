@@ -1,8 +1,8 @@
-export declare type APIMethod = (...args: any[]) => any;
-export declare type API = {
+export type APIMethod = (...args: any[]) => any;
+export type API = {
     [key: string]: APIMethod | API;
 };
-export declare type APIFactory = (socket: ServerAPI) => API | Promise<API>;
+export type APIFactory = (socket: ServerAPI) => API | Promise<API>;
 export interface ServerAPI {
     send: (data: any) => void;
     push: (data: any, forRequest?: number) => void;

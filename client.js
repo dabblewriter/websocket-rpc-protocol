@@ -1,5 +1,5 @@
 import { createId } from 'crypto-id';
-import { atom, signal } from 'easy-signal';
+import { signal, writable } from 'easy-signal';
 const CONNECTION_TIMEOUT = 5000;
 const BASE_RETRY_TIME = 1000;
 const MAX_RETRY_BACKOFF = 4;
@@ -7,7 +7,7 @@ export default function createClient(url, deviceId = createId(), serverTimeOffse
     const requests = new Map();
     const afterConnectedQueue = [];
     const afterAuthedQueue = [];
-    const state = atom({
+    const state = writable({
         deviceId,
         online: globalThis.navigator?.onLine,
         connected: false,
@@ -36,21 +36,21 @@ export default function createClient(url, deviceId = createId(), serverTimeOffse
         disconnect();
     }
     function updateData(update) {
-        const obj = state();
+        const obj = state.get();
         if (!Object.entries(update).some(([key, value]) => obj[key] !== value)) {
             return; // Nothing actually changed
         }
-        state(({ ...obj, ...update }));
+        state.set(({ ...obj, ...update }));
     }
     function connect() {
         clearTimeout(reconnectTimeout);
         clearTimeout(connectionTimeout);
         return new Promise((resolve, reject) => {
             shouldConnect = true;
-            if (!state().online) {
+            if (!state.get().online) {
                 return reject(new Error('offline'));
             }
-            else if (state().connected) {
+            else if (state.get().connected) {
                 return;
             }
             try {
@@ -74,7 +74,7 @@ export default function createClient(url, deviceId = createId(), serverTimeOffse
                 closing = null;
                 socket.onclose = null;
                 socket = null;
-                if (state().connected) {
+                if (state.get().connected) {
                     updateData({ connected: false, authed: false });
                 }
                 onClose();
@@ -82,7 +82,7 @@ export default function createClient(url, deviceId = createId(), serverTimeOffse
                     request.reject(new Error('CONNECTION_CLOSED'));
                     requests.delete(key);
                 });
-                if (shouldConnect && state().online) {
+                if (shouldConnect && state.get().online) {
                     const backoff = Math.round(Math.random() * (Math.pow(2, retries) - 1) * BASE_RETRY_TIME);
                     retries = Math.min(MAX_RETRY_BACKOFF, retries + 1);
                     reconnectTimeout = setTimeout(() => {
@@ -222,7 +222,7 @@ export default function createClient(url, deviceId = createId(), serverTimeOffse
         });
     }
     function sendAfterAuthed(action, ...args) {
-        if (state().authed)
+        if (state.get().authed)
             return send(action, ...args);
         return new Promise((resolve, reject) => {
             afterAuthedQueue.push({ action, args, resolve, reject });
@@ -238,7 +238,7 @@ export default function createClient(url, deviceId = createId(), serverTimeOffse
         return uid;
     }
     function getNow() {
-        return Date.now() + state().serverTimeOffset;
+        return Date.now() + state.get().serverTimeOffset;
     }
     function getDate() {
         return new Date(getNow());

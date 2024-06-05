@@ -1,5 +1,5 @@
 import { createId } from 'crypto-id';
-import { Atom, atom, signal, Signal } from 'easy-signal';
+import { signal, Signal, Writable, writable } from 'easy-signal';
 
 const CONNECTION_TIMEOUT = 5000;
 const BASE_RETRY_TIME = 1000;
@@ -22,7 +22,7 @@ export interface ClientAPI<T = {}> {
   close(): void;
   ping(): Promise<void>;
   api: T;
-  state: Atom<Client>;
+  state: Writable<Client>;
   send<T = any>(action: string, ...args: [...any[], AbortSignal, GenericFunction]): Promise<T>;
   send<T = any>(action: string, ...args: [...any[], GenericFunction]): Promise<T>;
   send<T = any>(action: string, ...args: any[]): Promise<T>;
@@ -43,7 +43,7 @@ export default function createClient<T = {}>(url: string, deviceId: string = cre
   const requests = new Map<number, Request>();
   const afterConnectedQueue: Array<Request> = [];
   const afterAuthedQueue: Array<Request> = [];
-  const state = atom({
+  const state = writable({
     deviceId,
     online: globalThis.navigator?.onLine,
     connected: false,
@@ -76,11 +76,11 @@ export default function createClient<T = {}>(url: string, deviceId: string = cre
   }
 
   function updateData(update: Partial<Client>) {
-    const obj = state();
+    const obj = state.get();
     if (!Object.entries(update).some(([key, value]) => obj[key] !== value)) {
       return; // Nothing actually changed
     }
-    state(({ ...obj, ...update }));
+    state.set(({ ...obj, ...update }));
   }
 
   function connect(): Promise<void> {
@@ -90,9 +90,9 @@ export default function createClient<T = {}>(url: string, deviceId: string = cre
     return new Promise((resolve, reject) => {
       shouldConnect = true;
 
-      if (!state().online) {
+      if (!state.get().online) {
         return reject(new Error('offline'));
-      } else if (state().connected) {
+      } else if (state.get().connected) {
         return;
       }
 
@@ -118,7 +118,7 @@ export default function createClient<T = {}>(url: string, deviceId: string = cre
         closing = null;
         socket.onclose = null;
         (socket as any) = null;
-        if (state().connected) {
+        if (state.get().connected) {
           updateData({ connected: false, authed: false });
         }
         onClose();
@@ -128,7 +128,7 @@ export default function createClient<T = {}>(url: string, deviceId: string = cre
           requests.delete(key);
         });
 
-        if (shouldConnect && state().online) {
+        if (shouldConnect && state.get().online) {
           const backoff = Math.round(Math.random() * (Math.pow(2, retries) - 1) * BASE_RETRY_TIME);
           retries = Math.min(MAX_RETRY_BACKOFF, retries + 1);
           reconnectTimeout = setTimeout(() => {
@@ -269,7 +269,7 @@ export default function createClient<T = {}>(url: string, deviceId: string = cre
   }
 
   function sendAfterAuthed(action: string, ...args: any[]): Promise<any> {
-    if (state().authed) return send(action, ...args);
+    if (state.get().authed) return send(action, ...args);
 
     return new Promise((resolve, reject) => {
       afterAuthedQueue.push({ action, args, resolve, reject });
@@ -287,7 +287,7 @@ export default function createClient<T = {}>(url: string, deviceId: string = cre
   }
 
   function getNow() {
-    return Date.now() + state().serverTimeOffset;
+    return Date.now() + state.get().serverTimeOffset;
   }
 
   function getDate() {

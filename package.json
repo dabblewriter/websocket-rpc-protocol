@@ -25,10 +25,10 @@
   },
   "homepage": "https://github.com/dabblewriter/websocket-rpc-protocol#readme",
   "devDependencies": {
-    "typescript": "^4.8.2"
+    "typescript": "^5.4.5"
   },
   "dependencies": {
-    "crypto-id": "^0.1.0",
-    "easy-signal": "^4.0.0"
+    "crypto-id": "^0.2.3",
+    "easy-signal": "^4.1.1"
   }
 }

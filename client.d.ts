@@ -1,4 +1,4 @@
-import { Atom, Signal } from 'easy-signal';
+import { Signal, Writable } from 'easy-signal';
 export interface Client {
     deviceId: string;
     online: boolean;
@@ -7,14 +7,14 @@ export interface Client {
     serverTimeOffset: number;
     serverVersion: string;
 }
-export declare type Unsubscribe = () => void;
+export type Unsubscribe = () => void;
 export interface ClientAPI<T = {}> {
     connect(): Promise<void>;
     disconnect(): void;
     close(): void;
     ping(): Promise<void>;
     api: T;
-    state: Atom<Client>;
+    state: Writable<Client>;
     send<T = any>(action: string, ...args: [...any[], AbortSignal, GenericFunction]): Promise<T>;
     send<T = any>(action: string, ...args: [...any[], GenericFunction]): Promise<T>;
     send<T = any>(action: string, ...args: any[]): Promise<T>;
@@ -33,5 +33,5 @@ export interface ClientAPI<T = {}> {
     onError: Signal<(error: Error) => void>;
 }
 export default function createClient<T = {}>(url: string, deviceId?: string, serverTimeOffset?: number): ClientAPI<T>;
-declare type GenericFunction = (...args: any[]) => any;
+type GenericFunction = (...args: any[]) => any;
 export {};
