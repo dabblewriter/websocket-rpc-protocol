@@ -92,14 +92,14 @@ export default function createClient<T = {}>(url: string, deviceId: string = cre
 
       if (!state.get().online) {
         return reject(new Error('offline'));
-      } else if (state.get().connected) {
+      } else if (socket && socket.readyState <= WebSocket.OPEN && state.get().connected) {
         return;
       }
 
       try {
         socket = new WebSocket(url);
         connectionTimeout = setTimeout(() => {
-          if (socket && socket.readyState !== WebSocket.CLOSED && socket.readyState !== WebSocket.CLOSING) {
+          if (socket && socket.readyState >= WebSocket.CLOSING) {
             socket.close();
           }
         }, CONNECTION_TIMEOUT);
