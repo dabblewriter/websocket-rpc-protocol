@@ -76,7 +76,7 @@ export default function createServer(version: string, api: API): ServerAPI {
     }
 
     try {
-      const result = await apiFunction(socket, ...d);
+      const result = await apiFunction.call(namespace, socket, ...d);
       if (typeof result?.signal === 'function') {
         // result is an object with method named signal with the library easy-signal, used to stream multiple results.
         // Send an undefined result to end the stream and an error to end the stream with an error.

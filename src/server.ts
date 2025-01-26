@@ -95,7 +95,7 @@ export default async function createServer(socket: WebSocket, version: string, a
     }
 
     try {
-      const result = await apiFunction(...d);
+      const result = await apiFunction.call(namespace, ...d);
       if (typeof result?.signal === 'function') {
         // result is an object with method named signal with the library easy-signal, used to stream multiple results.
         // Send an undefined result to end the stream and an error to end the stream with an error.
